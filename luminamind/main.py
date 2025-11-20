@@ -82,33 +82,43 @@ def _stringify(value: Any, limit: int = 200) -> str:
 IGNORED_NAMESPACE = {"__pregel_pull", "agent", "tools", "PatchToolCallsMiddleware.before_agent"}
 
 
-def _format_prefix(namespace: tuple[str, ...]) -> str:
+def _is_uuid(part: str) -> bool:
+    """Check if a string looks like a UUID."""
+    print(part)
+    return len(part) > 20 and "-" in part
+
+
+def _render_namespace_header(namespace: tuple[str, ...]) -> None:
+    """Render a header for the current namespace (sub-agent)."""
     labels = []
     for part in namespace:
+        label = part
+        print(label)
         if ":" in part:
-            labels.append(part.split(":", 1)[1])
-        elif part not in IGNORED_NAMESPACE:
-            labels.append(part)
+            label = part.split(":", 1)[1]
+        
+        if label not in IGNORED_NAMESPACE and not _is_uuid(label):
+            labels.append(label)
+    
     if not labels:
-        return ""
-    return f"[dim]{' / '.join(labels)}[/dim] "
+        return
+
+    header_text = " > ".join(labels)
+    console.print(f"\n[bold blue]🤖 {header_text}[/]")
 
 
-def _render_tool_start(namespace: tuple[str, ...], name: str, args: Any) -> None:
+def _render_tool_start(name: str, args: Any) -> None:
     args_text = _stringify(args, limit=200)
-    prefix = _format_prefix(namespace)
-    console.print(f"{prefix}[magenta]├─ ⚙️ {name}[/magenta] [dim]{args_text}[/dim]")
+    console.print(f"  [magenta]├─ ⚙️ {name}[/magenta] [dim]{args_text}[/dim]")
 
 
-def _render_tool_end(namespace: tuple[str, ...], name: str, result: Any) -> None:
+def _render_tool_end(name: str, result: Any) -> None:
     result_text = _stringify(result, limit=240)
-    prefix = _format_prefix(namespace)
-    console.print(f"{prefix}[green]└─ ✅ {name}[/green] [dim]{result_text}[/dim]")
+    console.print(f"  [green]└─ ✅ {name}[/green] [dim]{result_text}[/dim]")
 
 
-def _render_todos(namespace: tuple[str, ...], todos: list[dict]) -> None:
-    prefix = _format_prefix(namespace)
-    console.print(f"{prefix}[cyan]To-Do Updates[/cyan]")
+def _render_todos(todos: list[dict]) -> None:
+    console.print(f"  [cyan]To-Do Updates[/cyan]")
     for todo in todos:
         status = todo.get("status", "pending")
         if status == "completed":
@@ -117,12 +127,11 @@ def _render_todos(namespace: tuple[str, ...], todos: list[dict]) -> None:
             badge = "[yellow]~[/]"
         else:
             badge = "[dim]•[/]"
-        console.print(f"{prefix}  {badge} {todo.get('content','')}")
+        console.print(f"    {badge} {todo.get('content','')}")
 
 
-def _render_thinking(namespace: tuple[str, ...], text: str) -> None:
-    prefix = _format_prefix(namespace)
-    console.print(f"\n{prefix}[dim]{text}[/dim]\n")
+def _render_thinking(text: str) -> None:
+    console.print(f"\n  [dim]{text}[/dim]\n")
 
 
 def _prompt_for_approval(action: dict) -> bool:
@@ -138,15 +147,13 @@ def _prompt_for_approval(action: dict) -> bool:
     return Confirm.ask("\nApprove this action?", default=True)
 
 
-def _render_agent_reply(namespace: tuple[str, ...], text: str) -> None:
-    prefix = _format_prefix(namespace)
-    title = prefix.strip() or "Agent"
+def _render_agent_reply(text: str) -> None:
     console.print()
     console.print(
         Panel(
             Markdown(text),
-            border_style="cyan",
-            title=title or "Agent",
+            border_style="white",
+            title="Agent",
             style="white",
         )
     )
@@ -172,18 +179,17 @@ def _parse_args(args: Any) -> Any:
 CONTEXT_WINDOW_LIMIT = 128000
 
 
-def _render_usage(namespace: tuple[str, ...], usage: dict) -> None:
+def _render_usage(usage: dict) -> None:
     """Render token usage statistics."""
     if not usage:
         return
-    prefix = _format_prefix(namespace)
     input_tokens = usage.get("input_tokens", 0)
     output_tokens = usage.get("output_tokens", 0)
     total_tokens = usage.get("total_tokens", 0)
     remaining_tokens = CONTEXT_WINDOW_LIMIT - total_tokens
     
     usage_text = f"[dim]Tokens: {input_tokens} in / {output_tokens} out / {total_tokens} total / {remaining_tokens} remaining[/dim]"
-    console.print(f"{prefix}{usage_text}")
+    console.print(f"  {usage_text}")
 
 
 async def _stream_agent_response(user_input: str, thread_id: str) -> None:
@@ -193,6 +199,9 @@ async def _stream_agent_response(user_input: str, thread_id: str) -> None:
         "configurable": {"thread_id": thread_id},
         "recursion_limit": 200,
     }
+
+    current_namespace = None
+    printed_tool_calls = set()
 
     while True:
         interrupt_requests: list[dict] = []
@@ -244,6 +253,10 @@ async def _stream_agent_response(user_input: str, thread_id: str) -> None:
 
             namespace, stream_mode, data = chunk
 
+            if namespace != current_namespace:
+                _render_namespace_header(namespace)
+                current_namespace = namespace
+
             if stream_mode == "messages":
                 if not isinstance(data, tuple) or len(data) != 2:
                     continue
@@ -251,7 +264,7 @@ async def _stream_agent_response(user_input: str, thread_id: str) -> None:
 
                 # Check for usage metadata
                 if hasattr(message, "usage_metadata") and message.usage_metadata:
-                     _render_usage(namespace, message.usage_metadata)
+                     _render_usage(message.usage_metadata)
 
                 if isinstance(message, AIMessageChunk):
                     text = _content_to_text(message.content)
@@ -261,7 +274,7 @@ async def _stream_agent_response(user_input: str, thread_id: str) -> None:
                     if getattr(message, "chunk_position", None) == "last":
                         buffer_text = "".join(thought_buffer).strip()
                         if buffer_text:
-                            _render_thinking(namespace, buffer_text)
+                            _render_thinking(buffer_text)
                         thought_buffer.clear()
                         assistant_line_open = False
                     continue
@@ -270,28 +283,32 @@ async def _stream_agent_response(user_input: str, thread_id: str) -> None:
                     tool_calls = _get_tool_calls(message)
                     if tool_calls:
                         for call in tool_calls:
+                            call_id = call.get("id")
+                            if call_id and call_id in printed_tool_calls:
+                                continue
+                            if call_id:
+                                printed_tool_calls.add(call_id)
+                            
                             args = _parse_args(call.get("args"))
-                            _render_tool_start(namespace, call.get("name", "tool"), args)
+                            _render_tool_start(call.get("name", "tool"), args)
                             if call.get("name") == "task" and isinstance(args, dict):
                                 subagent = args.get("subagent_type") or args.get("name")
                                 if subagent:
-                                    prefix = _format_prefix(namespace)
-                                    console.print(f"{prefix}[yellow]↳ launching subagent: {subagent}[/yellow]")
-                        continue
+                                    console.print(f"  [yellow]↳ launching subagent: {subagent}[/yellow]")
+                        # Removed continue here to allow text rendering
                     text = _content_to_text(message.content)
                     if text:
-                        _render_agent_reply(namespace, text)
+                        _render_agent_reply(text)
                     continue
 
                 if isinstance(message, ToolMessage):
-                    _render_tool_end(namespace, message.name, message.content)
+                    _render_tool_end(message.name, message.content)
                     continue
 
                 if isinstance(message, HumanMessage):
                     text = _content_to_text(message.content)
                     if text:
-                        prefix = _format_prefix(namespace)
-                        console.print(f"{prefix}[yellow]{text}[/yellow]")
+                        console.print(f"  [yellow]{text}[/yellow]")
                     continue
 
             elif stream_mode == "updates":
@@ -309,7 +326,7 @@ async def _stream_agent_response(user_input: str, thread_id: str) -> None:
 
                 for payload in data.values():
                     if isinstance(payload, dict) and "todos" in payload:
-                        _render_todos(namespace, payload["todos"])
+                        _render_todos(payload["todos"])
 
         if interrupt_requests:
             status_running = False

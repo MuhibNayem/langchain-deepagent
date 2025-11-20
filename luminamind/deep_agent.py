@@ -185,7 +185,7 @@ def build_subagents():
 llm = ChatOpenAI(
     temperature=0.7,
     model="glm-4.5-flash",
-    openai_api_key="39d1fe8789cd4a9eaa53e1e4d9588ba0.Yi5gJP5zao8qFG6m",
+    openai_api_key=os.environ.get("GML_API_KEY"),
     openai_api_base="https://api.z.ai/api/paas/v4/",
     streaming=True,
 )

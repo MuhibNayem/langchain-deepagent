@@ -147,8 +147,8 @@ Agent> I'll analyze the codebase for quality issues and provide improvement sugg
 
 | Variable | Description | Required |
 |----------|-------------|----------|
-| `GML_API_KEY` | GLM API key for GLM model | Yes |
-| `GML_API_BASE` | GLM API base URL | Yes |
+| `GLM_API_KEY` | GLM API key for GLM model | Yes |
+| `GLM_API_BASE` | GLM API base URL | Yes |
 | `CHECKPOINT_REDIS_URL` | Redis URL for persistence | Optional |
 | `CHECKPOINT_REDIS_KEY` | Redis key for checkpoints | Optional |
 | `ALLOWED_ROOT` | Root directory for file operations | Optional |
@@ -215,7 +215,6 @@ The framework includes two specialized subagents:
 
 ### Important Security Notes
 ⚠️ **Critical Security Issues Identified:**
-1. **Hardcoded API Keys**: Remove API keys from source code (currently present in `.env` and `luminamind/deep_agent.py`)
 2. **Shell Command Injection**: Avoid `shell=True` in subprocess calls (`luminamind/py_tools/shell.py`)
 3. **Path Traversal**: Strengthen path validation mechanisms
 4. **Network Security**: Implement SSL/TLS verification for web requests

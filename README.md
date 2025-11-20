@@ -63,6 +63,12 @@ Luminamind is an advanced autonomous agent system designed to handle complex sof
 
 ## 🛠️ Installation
 
+### Python 3.12 requirement
+This project targets Python 3.12 (`pyproject.toml` pins `python = "^3.12"`), so make sure every workflow uses that interpreter:
+- Check your default version with `python3 --version`. If it is newer (e.g., 3.14), call `python3.12` explicitly for virtualenvs and tooling.
+- Poetry users can run `poetry env use /path/to/python3.12` to guarantee the right interpreter.
+- On macOS/Homebrew install via `brew install python@3.12`; Linux users can rely on distro packages or `pyenv install 3.12.x`.
+
 ### Option A – pipx (recommended)
 ```bash
 pipx install .
@@ -82,17 +88,25 @@ Windows (PowerShell):
 luminamind
 ```
 
-### Option C – Docker
+### Option C – Curl installer (macOS/Linux)
+When installing straight from GitHub, review the helper script and then run:
+```bash
+curl -fsSL https://raw.githubusercontent.com/MuhibNayem/langchain-deepagent/main/scripts/install_luminamind.sh | bash
+luminamind
+```
+
+### Option D – Docker
 ```bash
 docker build -t luminamind .
 docker run -it luminamind
 ```
 
-### Option D – Local development
+### Option E – Local development
 ```bash
 git clone <repository-url>
 cd luminamind
-python -m venv .venv && source .venv/bin/activate
+# Use python3.12 explicitly if python3 points elsewhere
+python3.12 -m venv .venv && source .venv/bin/activate
 pip install -e .
 luminamind
 ```
@@ -201,12 +215,18 @@ The framework includes two specialized subagents:
 
 ### Important Security Notes
 ⚠️ **Critical Security Issues Identified:**
-1. **Hardcoded API Keys**: Remove API keys from source code
-2. **Shell Command Injection**: Avoid `shell=True` in subprocess calls
+1. **Hardcoded API Keys**: Remove API keys from source code (currently present in `.env` and `luminamind/deep_agent.py`)
+2. **Shell Command Injection**: Avoid `shell=True` in subprocess calls (`luminamind/py_tools/shell.py`)
 3. **Path Traversal**: Strengthen path validation mechanisms
 4. **Network Security**: Implement SSL/TLS verification for web requests
 
 For detailed security analysis, see `docs/security_analysis_report.md`.
+
+#### Latest audit summary
+- `.env` and `luminamind/deep_agent.py` contain live API credentials; migrate them to a secrets store and rotate the keys immediately.
+- The `shell` tool still executes commands via `subprocess.run(..., shell=True)` and exposes the raw module for patching—sanitize inputs or refactor to safer execution before untrusted use.
+- Web tooling (`luminamind/py_tools/web_crawl.py`, `web_search.py`, `weather.py`) makes outbound requests without extra validation; enforce TLS verification, strict timeouts, and allow-list URLs to mitigate SSRF.
+- Keep leveraging `luminamind/py_tools/safety.py` for path validation, but add audit logging around critical filesystem operations to detect abuse.
 
 ## 📊 Performance Optimization
 

@@ -169,6 +169,23 @@ def _parse_args(args: Any) -> Any:
     return args
 
 
+CONTEXT_WINDOW_LIMIT = 128000
+
+
+def _render_usage(namespace: tuple[str, ...], usage: dict) -> None:
+    """Render token usage statistics."""
+    if not usage:
+        return
+    prefix = _format_prefix(namespace)
+    input_tokens = usage.get("input_tokens", 0)
+    output_tokens = usage.get("output_tokens", 0)
+    total_tokens = usage.get("total_tokens", 0)
+    remaining_tokens = CONTEXT_WINDOW_LIMIT - total_tokens
+    
+    usage_text = f"[dim]Tokens: {input_tokens} in / {output_tokens} out / {total_tokens} total / {remaining_tokens} remaining[/dim]"
+    console.print(f"{prefix}{usage_text}")
+
+
 async def _stream_agent_response(user_input: str, thread_id: str) -> None:
     """Stream the agent response with tool + HITL visibility."""
     stream_input: Any = {"messages": [{"role": "user", "content": user_input}]}
@@ -231,6 +248,10 @@ async def _stream_agent_response(user_input: str, thread_id: str) -> None:
                 if not isinstance(data, tuple) or len(data) != 2:
                     continue
                 message, metadata = data
+
+                # Check for usage metadata
+                if hasattr(message, "usage_metadata") and message.usage_metadata:
+                     _render_usage(namespace, message.usage_metadata)
 
                 if isinstance(message, AIMessageChunk):
                     text = _content_to_text(message.content)

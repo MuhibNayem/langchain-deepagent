@@ -6,9 +6,10 @@ from typing import Any, Dict, List, Optional, Tuple
 
 import requests
 from langchain.tools import tool
-from dotenv import load_dotenv
 
-load_dotenv()
+from ..config.env import load_project_env
+
+load_project_env()
 
 AGENT_UA = "langgraph-agent/1.0"
 SERPER_API_KEY = os.environ.get("SERPER_API_KEY")

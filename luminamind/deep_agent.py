@@ -2,7 +2,6 @@ import os
 import requests
 from bs4 import BeautifulSoup
 from deepagents import create_deep_agent
-from dotenv import load_dotenv
 from pathlib import Path
 from langchain.tools import tool
 from langchain_openai import ChatOpenAI
@@ -14,11 +13,12 @@ from langchain_community.tools.file_management.move import MoveFileTool
 from langchain_community.tools.file_management.read import ReadFileTool
 from langchain_community.tools.file_management.write import WriteFileTool
 
-from config.checkpointer import create_checkpointer
-from py_tools.registry import PY_TOOL_REGISTRY
+from .config.checkpointer import create_checkpointer
+from .config.env import load_project_env
+from .py_tools.registry import PY_TOOL_REGISTRY
 
 ROOT_DIR = Path(__file__).resolve().parent
-load_dotenv()
+load_project_env()
 
 
 @tool
@@ -149,6 +149,7 @@ def build_subagents():
             registry_tool("replace_in_file"),
             registry_tool("shell"),
             registry_tool("os_info"),
+            registry_tool("edit_file"),
         ],
     }
     general_purpose_agent = {
@@ -215,6 +216,11 @@ agent_kwargs = {
     "tools": ALL_BASE_TOOLS,
     "system_prompt": SYSTEM_PROMPT,
     "subagents": build_subagents(),
+    "interrupt_on":{
+        "delete_file": {"allowed_decisions": ["approve", "edit", "reject"]},
+        "write_file": {"allowed_decisions": ["approve", "reject"]},
+        "critical_operation": {"allowed_decisions": ["approve"]},
+        },
 }
 
 if should_use_custom_checkpointer():

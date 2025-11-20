@@ -3,7 +3,7 @@
         "."
     ],
     "graphs": {
-        "deep_agent": "./deep_agent.py:app"
+        "research": "./deep_agent.py:app"
     },
     "env": ".env"
 }

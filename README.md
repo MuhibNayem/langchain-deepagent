@@ -1,10 +1,10 @@
-# TestAgent - Deep Autonomy Agent Framework
+# Luminamind - Deep Autonomy Agent Framework
 
 A sophisticated AI agent framework built with LangChain, LangGraph, and OpenAI's GLM model for autonomous code analysis, research, and development tasks.
 
 ## 🚀 Overview
 
-TestAgent is an advanced autonomous agent system designed to handle complex software engineering tasks including code analysis, file management, web research, and development operations. The framework leverages cutting-edge AI models and a modular tool architecture to provide intelligent automation capabilities.
+Luminamind is an advanced autonomous agent system designed to handle complex software engineering tasks including code analysis, file management, web research, and development operations. The framework leverages cutting-edge AI models and a modular tool architecture to provide intelligent automation capabilities.
 
 ## ✨ Key Features
 
@@ -33,82 +33,75 @@ TestAgent is an advanced autonomous agent system designed to handle complex soft
 ## 📁 Project Structure
 
 ```
-testagent/
-├── main.py                    # CLI entry point and conversation interface
-├── deep_agent.py             # Core agent configuration and tool setup
-├── pyproject.toml            # Project dependencies and configuration
-├── config/
-│   └── checkpointer.py      # Checkpoint persistence (Redis/File)
-├── py_tools/                 # Custom tool implementations
-│   ├── registry.py          # Tool registry system
-│   ├── os_info.py           # System information tools
-│   ├── shell.py             # Shell command execution
-│   ├── replace_in_file.py   # Advanced file replacement
-│   ├── web_search.py        # Web search with multiple providers
-│   ├── web_crawl.py         # Web content crawling
-│   ├── weather.py           # Weather API integration
-│   └── safety.py            # Security and path validation
-├── docs/
-│   └── security_analysis_report.md  # Security assessment
-├── .env                     # Environment variables
-└── langgraph.json           # LangGraph configuration
+.
+├── luminamind/
+│   ├── __init__.py
+│   ├── main.py                 # CLI entry point
+│   ├── deep_agent.py           # Agent + tool wiring
+│   ├── config/
+│   │   ├── env.py              # Loads project .env files
+│   │   └── checkpointer.py     # Redis/file checkpoint helpers
+│   └── py_tools/               # Custom tool implementations
+│       ├── registry.py
+│       ├── edit.py
+│       ├── os_info.py
+│       ├── replace_in_file.py
+│       ├── safety.py
+│       ├── shell.py
+│       ├── web_crawl.py
+│       ├── web_search.py
+│       └── weather.py
+├── scripts/
+│   ├── install_luminamind.sh   # macOS/Linux installer (pipx)
+│   └── install_luminamind.ps1  # Windows installer (pipx)
+├── Dockerfile                  # Containerized distribution
+├── README.md
+├── pyproject.toml
+├── langgraph.json
+└── docs/security_analysis_report.md
 ```
 
 ## 🛠️ Installation
 
-### Prerequisites
-- Python 3.12 or higher
-- Redis server (optional, for checkpoint persistence)
-- OpenAI API access (for GLM model)
+### Option A – pipx (recommended)
+```bash
+pipx install .
+luminamind
+```
 
-### Setup Instructions
+### Option B – Helper scripts
+macOS / Linux:
+```bash
+bash scripts/install_luminamind.sh
+luminamind
+```
 
-1. **Clone the repository**
-   ```bash
-   git clone <repository-url>
-   cd testagent
-   ```
+Windows (PowerShell):
+```powershell
+.\scripts\install_luminamind.ps1
+luminamind
+```
 
-2. **Install dependencies**
-   ```bash
-   poetry install
-   ```
+### Option C – Docker
+```bash
+docker build -t luminamind .
+docker run -it luminamind
+```
 
-3. **Configure environment variables**
-   Create a `.env` file with the following configuration:
-   ```env
-   # API Configuration
-   OPENAI_API_KEY=your_openai_api_key
-   OPENAI_API_BASE=https://api.z.ai/api/paas/v4/
-   
-   # Optional: Redis for persistent checkpoints
-   CHECKPOINT_REDIS_URL=redis://localhost:6379
-   CHECKPOINT_REDIS_KEY=langgraph:checkpoints
-   
-   # Optional: Web search APIs
-   SERPER_API_KEY=your_serper_api_key
-   GOOGLE_API_KEY=your_google_api_key
-   GOOGLE_CSE_ID=your_custom_search_engine_id
-   
-   # Security settings
-   ALLOWED_ROOT=/path/to/allowed/directory
-   DEBUG_WEB_SEARCH=0
-   ```
-
-4. **Run the agent**
-   ```bash
-   # Start interactive CLI
-   python main.py chat
-   
-   # Resume existing conversation
-   python main.py chat --thread <thread-id>
-   ```
+### Option D – Local development
+```bash
+git clone <repository-url>
+cd luminamind
+python -m venv .venv && source .venv/bin/activate
+pip install -e .
+luminamind
+```
 
 ## 🎯 Usage Examples
 
 ### Basic Conversation
 ```bash
-$ python main.py chat
+$ luminamind
 Deep Agent CLI
 Type your question and press enter. Commands: /exit, /reset
 
@@ -149,6 +142,9 @@ Agent> I'll analyze the codebase for quality issues and provide improvement sugg
 | `GOOGLE_API_KEY` | Google API key for custom search | Optional |
 | `GOOGLE_CSE_ID` | Google Custom Search Engine ID | Optional |
 | `DEBUG_WEB_SEARCH` | Enable debug logging for web search | Optional |
+| `WEATHER_API_KEY` | WeatherAPI key for weather tool | Optional |
+
+> ℹ️ When you run `luminamind` inside any project directory, the CLI automatically loads that project’s `.env` (thanks to `config/env.py`). Keep a `.env` in each workspace to scope credentials per project.
 
 ### Tool Configuration
 
@@ -254,23 +250,25 @@ For detailed security analysis, see `docs/security_analysis_report.md`.
 
 ### Unit Testing
 ```bash
-# Run all tests
-poetry run pytest
+# Run all tests from source checkout
+python -m venv .venv && source .venv/bin/activate
+pip install -e .[dev]
+pytest
 
 # Run specific test file
-poetry run pytest tests/test_agent.py
+pytest tests/test_agent.py
 
 # Run with coverage
-poetry run pytest --cov=deep_agent
+pytest --cov=luminamind
 ```
 
 ### Integration Testing
 ```bash
 # Test agent conversation flow
-poetry run python tests/test_conversation.py
+python tests/test_conversation.py
 
 # Test tool integration
-poetry run python tests/test_tools.py
+python tests/test_tools.py
 ```
 
 ## 📈 Monitoring and Logging

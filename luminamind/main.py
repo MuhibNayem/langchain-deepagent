@@ -5,7 +5,6 @@ import time
 from typing import Any, Iterable, Optional
 
 import typer
-from dotenv import load_dotenv
 from langchain_core.messages import (
     AIMessage,
     AIMessageChunk,
@@ -23,7 +22,8 @@ from rich.prompt import Confirm
 from rich.table import Table
 from rich.text import Text
 
-from deep_agent import app
+from .config.env import load_project_env
+from .deep_agent import app
 
 console = Console()
 cli = typer.Typer(help="Interactive Deep Agent CLI")
@@ -135,7 +135,7 @@ def _prompt_for_approval(action: dict) -> bool:
             border_style="red",
         )
     )
-    return Confirm.ask("Approve this action?", default=True)
+    return Confirm.ask("\nApprove this action?", default=True)
 
 
 def _render_agent_reply(namespace: tuple[str, ...], text: str) -> None:
@@ -187,8 +187,8 @@ async def _stream_agent_response(user_input: str, thread_id: str) -> None:
         status_running = True
         status = console.status(
             Text(
-                f"{STATUS_FRAMES[status_frame][0]} {STATUS_PHRASES[status_index]}",
-                style=STATUS_FRAMES[status_frame][1],
+                f"{STATUS_PHRASES[status_index]}",
+                style="bold magenta",
             ),
             spinner="dots",
         )
@@ -201,11 +201,11 @@ async def _stream_agent_response(user_input: str, thread_id: str) -> None:
                 if not status_running:
                     break
                 idle = time.time() - last_event
-                if idle >= 1.2:
-                    status_frame = (status_frame + 1) % len(STATUS_FRAMES)
-                    icon, style = STATUS_FRAMES[status_frame]
+                if idle >= 2:
+                    status_frame = (status_frame + 1) 
+                    style = "bold magenta"
                     status_index = (status_index + 1) % len(STATUS_PHRASES)
-                    status.update(Text(f"{icon} {STATUS_PHRASES[status_index]}", style=style))
+                    status.update(Text(f"{STATUS_PHRASES[status_index]}", style=style))
                 else:
                     status.update(Text("", style="magenta"))
 
@@ -291,6 +291,15 @@ async def _stream_agent_response(user_input: str, thread_id: str) -> None:
                         _render_todos(namespace, payload["todos"])
 
         if interrupt_requests:
+            status_running = False
+            monitor_task.cancel()
+            try:
+                await monitor_task
+            except asyncio.CancelledError:
+                pass
+            status.stop()
+            console.print()
+
             decisions = []
             for request in interrupt_requests:
                 for action in request.get("action_requests", []):
@@ -301,13 +310,6 @@ async def _stream_agent_response(user_input: str, thread_id: str) -> None:
                         decisions.append({"type": "reject", "message": "Rejected by user"})
 
             stream_input = Command(resume={"decisions": decisions})
-            status_running = False
-            monitor_task.cancel()
-            try:
-                await monitor_task
-            except asyncio.CancelledError:
-                pass
-            status.stop()
             continue
         status_running = False
         monitor_task.cancel()
@@ -329,7 +331,7 @@ def chat(thread: Optional[str] = typer.Option(None, help="Existing thread ID to 
     """
     Start a conversational CLI with the deep agent.
     """
-    load_dotenv()
+    load_project_env()
     current_thread = thread or str(uuid7())
     typer.echo("Deep Agent CLI")
     typer.echo("Type your question and press enter. Commands: /exit, /reset")

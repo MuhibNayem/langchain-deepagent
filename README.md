@@ -147,8 +147,8 @@ Agent> I'll analyze the codebase for quality issues and provide improvement sugg
 
 | Variable | Description | Required |
 |----------|-------------|----------|
-| `OPENAI_API_KEY` | OpenAI API key for GLM model | Yes |
-| `OPENAI_API_BASE` | OpenAI API base URL | Yes |
+| `GML_API_KEY` | GLM API key for GLM model | Yes |
+| `GML_API_BASE` | GLM API base URL | Yes |
 | `CHECKPOINT_REDIS_URL` | Redis URL for persistence | Optional |
 | `CHECKPOINT_REDIS_KEY` | Redis key for checkpoints | Optional |
 | `ALLOWED_ROOT` | Root directory for file operations | Optional |

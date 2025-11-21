@@ -2674,6 +2674,17 @@ files = [
 ]
 
 [[package]]
+name = "patch-ng"
+version = "1.19.0"
+description = "Library to parse and apply unified diffs."
+optional = false
+python-versions = ">=3.6"
+groups = ["main"]
+files = [
+    {file = "patch-ng-1.19.0.tar.gz", hash = "sha256:27484792f4ac1c15fe2f3e4cecf74bb9833d33b75c715b71d199f7e1e7d1f786"},
+]
+
+[[package]]
 name = "pluggy"
 version = "1.6.0"
 description = "plugin and hook calling mechanisms for python"
@@ -4721,4 +4732,4 @@ cffi = ["cffi (>=1.17,<2.0) ; platform_python_implementation != \"PyPy\" and pyt
 [metadata]
 lock-version = "2.1"
 python-versions = "^3.12"
-content-hash = "3cdeb4a562a5543c79ee019cf009820723d1925ffd1ff413634eb5ee29131d8a"
+content-hash = "bab1f1eb5a9c57836282eb77983b8788b29b8dfb7e31c31fdbbcd544f568cf9b"

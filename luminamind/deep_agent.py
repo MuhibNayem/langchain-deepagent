@@ -22,52 +22,6 @@ ROOT_DIR = Path(__file__).resolve().parent
 load_project_env()
 
 
-@tool
-def web_crawler(url: str):
-    """Crawls the given URL and returns the content."""
-    try:
-        response = requests.get(url)
-        response.raise_for_status()
-        soup = BeautifulSoup(response.text, "html.parser")
-        return soup.body.get_text(separator="\n", strip=True)
-    except requests.exceptions.RequestException as e:
-        return f"Error crawling {url}: {e}"
-
-
-@tool
-def web_surfing(url: str, query: str | None = None):
-    """
-    Surfs the web by navigating to a URL, extracting links, and optionally
-    following a relevant link based on a query.
-    """
-    try:
-        response = requests.get(url)
-        response.raise_for_status()
-        soup = BeautifulSoup(response.text, "html.parser")
-
-        if query:
-            links = soup.find_all("a", href=True)
-            relevant_link = None
-            for link in links:
-                if query.lower() in link.get_text().lower() or query.lower() in link["href"].lower():
-                    relevant_link = link["href"]
-                    break
-
-            if relevant_link:
-                if not relevant_link.startswith("http"):
-                    relevant_link = requests.compat.urljoin(url, relevant_link)
-                return web_crawler(relevant_link)
-            return (
-                f"No relevant link found for query '{query}' on {url}. Returning main page content.\n"
-                + soup.body.get_text(separator="\n", strip=True)
-            )
-
-        return soup.body.get_text(separator="\n", strip=True)
-
-    except requests.exceptions.RequestException as e:
-        return f"Error surfing {url}: {e}"
-
-
 copy_file_tool = CopyFileTool()
 delete_file_tool = DeleteFileTool()
 file_search_tool = FileSearchTool()
@@ -94,8 +48,6 @@ ALL_BASE_TOOLS = [
     move_file_tool,
     read_file_tool,
     write_file_tool,
-    web_crawler,
-    web_surfing,
 ] + python_native_tools
 
 
@@ -132,9 +84,7 @@ def build_subagents():
         "system_prompt": WEB_RESEARCH_SUBAGENT_PROMPT,
         "tools": [
             registry_tool("web_search"),
-            registry_tool("web_crawl"),
-            web_crawler,
-            web_surfing,
+            registry_tool("fetch_as_markdown"),
             registry_tool("get_weather"),
         ],
     }
@@ -144,19 +94,19 @@ def build_subagents():
         "system_prompt": CODE_EXECUTOR_SUBAGENT_PROMPT,
         "tools": [
             list_directory_tool,
+            registry_tool("tree_view"),
             read_file_tool,
             write_file_tool,
             copy_file_tool,
             move_file_tool,
             delete_file_tool,
             file_search_tool,
-            registry_tool("replace_in_file"),
             registry_tool("multi_replace_in_file"),
+            registry_tool("apply_patch"),
             registry_tool("grep_search"),
             registry_tool("read_files_in_directory"),
             registry_tool("shell"),
             registry_tool("os_info"),
-            registry_tool("edit_file"),
         ],
     }
     general_purpose_agent = {

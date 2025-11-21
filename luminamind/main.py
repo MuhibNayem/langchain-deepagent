@@ -1,9 +1,11 @@
+import subprocess
 import asyncio
 import json
 import sys
 import time
 from typing import Any, Iterable, Optional
 
+import questionary
 import typer
 from langchain_core.messages import (
     AIMessage,
@@ -31,7 +33,7 @@ from .config.env import load_project_env
 from .deep_agent import app
 
 console = Console()
-cli = typer.Typer(help="Interactive Deep Agent CLI")
+cli = typer.Typer(help="Interactive Deep Agent CLI", invoke_without_command=True)
 
 STATUS_PHRASES = [
     "Coding is 90% debugging, 10% writing bugs.",
@@ -99,7 +101,7 @@ def _render_namespace_header(namespace: tuple[str, ...]) -> None:
     
     if not labels:
         return
-
+ 
     header_text = " > ".join(labels)
     console.print(f"\n[bold blue]🤖 {header_text}[/]")
 
@@ -354,6 +356,38 @@ async def _stream_agent_response(user_input: str, thread_id: str) -> None:
 
     if assistant_line_open:
         console.print()
+
+
+@cli.callback(invoke_without_command=True)
+def main(ctx: typer.Context):
+    """
+    LuminaMind: Deep Agent CLI & Dev Server Launcher.
+    """
+    if ctx.invoked_subcommand is None:
+        console.print(Panel.fit("[bold cyan]Welcome to LuminaMind[/bold cyan]", border_style="cyan"))
+        
+        choice = questionary.select(
+            "Select mode:",
+            choices=["CLI Chat", "LangGraph Dev"],
+            style=questionary.Style([
+                ('qmark', 'fg:#673ab7 bold'),       # token in front of the question
+                ('question', 'bold'),               # question text
+                ('answer', 'fg:#f44336 bold'),      # submitted answer text behind the question
+                ('pointer', 'fg:#673ab7 bold'),     # pointer used in select and checkbox prompts
+                ('highlighted', 'fg:#673ab7 bold'), # pointed-at choice in select and checkbox prompts
+                ('selected', 'fg:#cc5454'),         # style for a selected item of a checkbox
+                ('separator', 'fg:#cc5454'),        # separator in lists
+                ('instruction', ''),                # user instructions for select, rawselect, checkbox
+                ('text', ''),                       # plain text
+                ('disabled', 'fg:#858585 italic')   # disabled choices for select and checkbox prompts
+            ])
+        ).ask()
+        
+        if choice == "CLI Chat":
+            chat(None)
+        elif choice == "LangGraph Dev":
+            console.print("[green]Starting LangGraph Dev Server...[/green]")
+            subprocess.run(["langgraph", "dev"])
 
 
 @cli.command()

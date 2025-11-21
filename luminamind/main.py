@@ -127,8 +127,6 @@ def _render_todos(todos: list[dict]) -> None:
         console.print(f"    {badge} {todo.get('content','')}")
 
 
-def _render_thinking(text: str) -> None:
-    console.print(f"\n  [dim]{text}[/dim]\n")
 
 
 def _prompt_for_approval(action: dict) -> bool:
@@ -204,7 +202,6 @@ async def _stream_agent_response(user_input: str, thread_id: str) -> None:
         interrupt_requests: list[dict] = []
         last_event = time.time()
         assistant_line_open = False
-        thought_buffer: list[str] = []
         status_index = 0
         status_frame = 0
         status_running = True
@@ -260,21 +257,23 @@ async def _stream_agent_response(user_input: str, thread_id: str) -> None:
                         continue
                     message, metadata = data
 
-                    # Check for usage metadata
-                    if hasattr(message, "usage_metadata") and message.usage_metadata:
+                    # Check for usage metadata for non-chunks
+                    if not isinstance(message, AIMessageChunk) and hasattr(message, "usage_metadata") and message.usage_metadata:
                          _render_usage(message.usage_metadata)
 
                     if isinstance(message, AIMessageChunk):
                         text = _content_to_text(message.content)
                         if text:
-                            thought_buffer.append(text)
+                            status.stop() # Stop the spinner only if we have text to print
+                            console.print(text, end="")
+                            # Force flush to ensure immediate display
+                            sys.stdout.flush()
                             assistant_line_open = True
                         if getattr(message, "chunk_position", None) == "last":
-                            buffer_text = "".join(thought_buffer).strip()
-                            if buffer_text:
-                                _render_thinking(buffer_text)
-                            thought_buffer.clear()
+                            console.print()
                             assistant_line_open = False
+                            if hasattr(message, "usage_metadata") and message.usage_metadata:
+                                _render_usage(message.usage_metadata)
                         continue
 
                     if isinstance(message, AIMessage):
@@ -373,6 +372,7 @@ def chat(thread: Optional[str] = typer.Option(None, help="Existing thread ID to 
     })
 
     kb = KeyBindings()
+    last_interrupt_time = 0.0
 
     @kb.add('enter')
     def _(event):
@@ -386,6 +386,12 @@ def chat(thread: Optional[str] = typer.Option(None, help="Existing thread ID to 
         try:
             user_input = session.prompt([('class:prompt', 'You: ')], style=style, multiline=True, key_bindings=kb)
         except KeyboardInterrupt:
+            now = time.time()
+            if now - last_interrupt_time < 1.0:
+                typer.echo("\nExiting. Goodbye!")
+                break
+            last_interrupt_time = now
+            typer.echo("\n(Press Ctrl+C again to exit)")
             continue
         except EOFError:
             typer.echo("\nExiting. Goodbye!")

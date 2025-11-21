@@ -3,7 +3,7 @@
         "."
     ],
     "graphs": {
-        "research": "./deep_agent.py:app"
+        "luminamind": "luminamind.deep_agent:app"
     },
     "env": ".env"
 }

@@ -151,6 +151,8 @@ def build_subagents():
             delete_file_tool,
             file_search_tool,
             registry_tool("replace_in_file"),
+            registry_tool("multi_replace_in_file"),
+            registry_tool("grep_search"),
             registry_tool("read_files_in_directory"),
             registry_tool("shell"),
             registry_tool("os_info"),
@@ -239,7 +241,6 @@ agent_kwargs = {
     "subagents": build_subagents(),
     "interrupt_on":{
         "delete_file": {"allowed_decisions": ["approve", "edit", "reject"]},
-        "write_file": {"allowed_decisions": ["approve", "reject"]},
         "critical_operation": {"allowed_decisions": ["approve"]},
         },
 }

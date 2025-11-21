@@ -4,6 +4,7 @@ from bs4 import BeautifulSoup
 from deepagents import create_deep_agent
 from pathlib import Path
 from langchain.tools import tool
+from langchain_ollama import ChatOllama
 from langchain_openai import ChatOpenAI
 from langchain_community.tools.file_management.copy import CopyFileTool
 from langchain_community.tools.file_management.delete import DeleteFileTool
@@ -182,13 +183,29 @@ def build_subagents():
         },
     ]
 
-llm = ChatOpenAI(
-    temperature=0.7,
-    model="glm-4.5-flash",
-    openai_api_key=os.environ.get("GLM_API_KEY"),
-    openai_api_base="https://api.z.ai/api/paas/v4/",
-    streaming=True,
-)
+
+    
+    
+def get_llm():
+    provider = os.environ.get("LLM_PROVIDER", "openai").lower()
+    
+    if provider == "ollama":
+        return ChatOllama(
+            model=os.environ.get("OLLAMA_MODEL", "qwen3-latest"),
+            base_url=os.environ.get("OLLAMA_BASE_URL", "http://localhost:11434"),
+            temperature=0.7,
+            streaming=True,
+        )
+    
+    return ChatOpenAI(
+        temperature=0.7,
+        model="glm-4.5-flash",
+        openai_api_key=os.environ.get("GLM_API_KEY"),
+        openai_api_base="https://api.z.ai/api/paas/v4/",
+        streaming=True,
+    )
+
+llm = get_llm()
 
 LANGGRAPH_PLATFORM_ENV_KEYS = {
     "LANGGRAPH_API_BASE",

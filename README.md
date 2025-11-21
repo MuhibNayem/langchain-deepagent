@@ -153,7 +153,10 @@ Agent> I'll analyze the codebase for quality issues and provide improvement sugg
 | Variable | Description | Required |
 |----------|-------------|----------|
 | `GLM_API_KEY` | GLM API key for GLM model | Yes |
-| `GLM_API_BASE` | GLM API base URL | Yes |
+| `GLM_API_BASE` | GLM API base URL | Yes (if using OpenAI/GLM) |
+| `LLM_PROVIDER` | LLM provider (`openai` or `ollama`) | Optional (default: `openai`) |
+| `OLLAMA_MODEL` | Ollama model name (e.g. `llama3`) | Optional (default: `llama3`) |
+| `OLLAMA_BASE_URL` | Ollama API base URL | Optional (default: `http://localhost:11434`) |
 | `CHECKPOINT_REDIS_URL` | Redis URL for persistence | Optional |
 | `CHECKPOINT_REDIS_KEY` | Redis key for checkpoints | Optional |
 | `ALLOWED_ROOT` | Root directory for file operations | Optional |

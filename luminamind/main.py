@@ -21,6 +21,11 @@ from rich.panel import Panel
 from rich.prompt import Confirm
 from rich.table import Table
 from rich.text import Text
+from prompt_toolkit import PromptSession
+from prompt_toolkit.history import InMemoryHistory
+from prompt_toolkit.styles import Style
+from prompt_toolkit.formatted_text import HTML
+from prompt_toolkit.key_binding import KeyBindings
 
 from .config.env import load_project_env
 from .deep_agent import app
@@ -28,12 +33,6 @@ from .deep_agent import app
 console = Console()
 cli = typer.Typer(help="Interactive Deep Agent CLI")
 
-STATUS_FRAMES = [
-    ("✨", "bold magenta"),
-    ("🌟", "bold yellow"),
-    ("💫", "bold blue"),
-    ("🌠", "bold cyan"),
-]
 STATUS_PHRASES = [
     "Coding is 90% debugging, 10% writing bugs.",
     "Aligning semicolons with the universe...",
@@ -79,12 +78,11 @@ def _stringify(value: Any, limit: int = 200) -> str:
     return text
 
 
-IGNORED_NAMESPACE = {"__pregel_pull", "agent", "tools", "PatchToolCallsMiddleware.before_agent"}
+IGNORED_NAMESPACE = {}
 
 
 def _is_uuid(part: str) -> bool:
     """Check if a string looks like a UUID."""
-    print(part)
     return len(part) > 20 and "-" in part
 
 
@@ -93,7 +91,6 @@ def _render_namespace_header(namespace: tuple[str, ...]) -> None:
     labels = []
     for part in namespace:
         label = part
-        print(label)
         if ":" in part:
             label = part.split(":", 1)[1]
         
@@ -197,7 +194,7 @@ async def _stream_agent_response(user_input: str, thread_id: str) -> None:
     stream_input: Any = {"messages": [{"role": "user", "content": user_input}]}
     config: RunnableConfig = {
         "configurable": {"thread_id": thread_id},
-        "recursion_limit": 200,
+        "recursion_limit": 600,
     }
 
     current_namespace = None
@@ -372,11 +369,26 @@ def chat(thread: Optional[str] = typer.Option(None, help="Existing thread ID to 
     load_project_env()
     current_thread = thread or str(uuid7())
     typer.echo("Deep Agent CLI")
-    typer.echo("Type your question and press enter. Commands: /exit, /reset")
+    typer.echo("Type your question. Press Meta+Enter (or Esc then Enter) to submit. Commands: /exit, /reset")
+
+    session = PromptSession(history=InMemoryHistory())
+    style = Style.from_dict({
+        'prompt': 'bold cyan',
+    })
+
+    kb = KeyBindings()
+
+    @kb.add('enter')
+    def _(event):
+        event.current_buffer.validate_and_handle()
+
+    @kb.add('escape', 'enter')
+    def _(event):
+        event.current_buffer.insert_text('\n')
 
     while True:
         try:
-            user_input = typer.prompt("You")
+            user_input = session.prompt([('class:prompt', 'You: ')], style=style, multiline=True, key_bindings=kb)
         except (KeyboardInterrupt, EOFError):
             typer.echo("\nExiting. Goodbye!")
             break

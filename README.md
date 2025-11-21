@@ -11,7 +11,7 @@ Luminamind is an advanced autonomous agent system designed to handle complex sof
 ### 🤖 Core Agent Capabilities
 - **Deep Autonomy**: AI-powered autonomous task execution with planning capabilities
 - **Multi-Agent Architecture**: Specialized subagents for different domains (web research, code execution)
-- **Conversational Interface**: Interactive CLI for natural language interaction
+- **Conversational Interface**: Interactive CLI with history, multiline support, and rich text output
 - **Persistent Memory**: Thread-based conversation persistence with Redis/file-based checkpoints
 - **Tool Integration**: Comprehensive set of tools for file operations, web research, and system tasks
 
@@ -117,7 +117,12 @@ luminamind
 ```bash
 $ luminamind
 Deep Agent CLI
-Type your question and press enter. Commands: /exit, /reset
+Deep Agent CLI
+Type your question. Press Enter to submit.
+To insert a new line:
+- **Meta+Enter** (Alt+Enter on Windows/Linux, Option+Enter on macOS if configured)
+- **Esc then Enter** (Reliable on all systems)
+Commands: /exit, /reset
 
 You> Analyze this codebase for security vulnerabilities
 Agent> I'll analyze the codebase for security vulnerabilities. Let me start by exploring the project structure...

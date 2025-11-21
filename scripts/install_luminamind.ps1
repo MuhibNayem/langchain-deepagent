@@ -6,8 +6,22 @@ $ErrorActionPreference = "Stop"
 
 # Check for Python
 if (-not (Get-Command python -ErrorAction SilentlyContinue)) {
-    Write-Error "Python is not installed. Please install Python 3.12+ first."
-    exit 1
+    Write-Host "[install] Python not found." -ForegroundColor Yellow
+    if (Get-Command winget -ErrorAction SilentlyContinue) {
+        Write-Host "[install] Attempting to install Python 3.12 via winget..." -ForegroundColor Cyan
+        winget install -e --id Python.Python.3.12 
+        
+        # Refresh env vars
+        $env:Path = [System.Environment]::GetEnvironmentVariable("Path","Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path","User")
+        
+        if (-not (Get-Command python -ErrorAction SilentlyContinue)) {
+             Write-Error "Python installation failed or Path not updated. Please restart PowerShell and try again."
+             exit 1
+        }
+    } else {
+        Write-Error "Python is not installed and winget is missing. Please install Python 3.12+ manually from https://python.org"
+        exit 1
+    }
 }
 
 # Check for pipx

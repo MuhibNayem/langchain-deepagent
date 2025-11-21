@@ -151,6 +151,7 @@ def build_subagents():
             delete_file_tool,
             file_search_tool,
             registry_tool("replace_in_file"),
+            registry_tool("read_files_in_directory"),
             registry_tool("shell"),
             registry_tool("os_info"),
             registry_tool("edit_file"),

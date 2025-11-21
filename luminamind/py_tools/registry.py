@@ -5,6 +5,7 @@ from langchain_core.tools import BaseTool
 from .edit import edit_file
 from .os_info import os_info
 from .replace_in_file import replace_in_file
+from .read_many import read_files_in_directory
 from .shell import shell
 from .weather import get_weather
 from .web_crawl import web_crawl
@@ -17,6 +18,7 @@ PY_TOOL_REGISTRY: dict[str, BaseTool] = {
         edit_file,
         shell,
         replace_in_file,
+        read_files_in_directory,
         get_weather,
         web_crawl,
         web_search,

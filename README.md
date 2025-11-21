@@ -84,7 +84,7 @@ luminamind
 
 Windows (PowerShell):
 ```powershell
-.\scripts\install_luminamind.ps1
+irm https://raw.githubusercontent.com/MuhibNayem/langchain-deepagent/main/scripts/install_luminamind.ps1 | iex
 luminamind
 ```
 

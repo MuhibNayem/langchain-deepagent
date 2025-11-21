@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "luminamind"
-version = "0.0.1.1.1"
+version = "0.0.1.1.2"
 description = ""
 authors = ["MuhibNayem <nayem.drmc@gmail.com>"]
 readme = "README.md"

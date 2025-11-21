@@ -191,7 +191,7 @@ def get_llm():
     
     if provider == "ollama":
         return ChatOllama(
-            model=os.environ.get("OLLAMA_MODEL", "qwen3-latest"),
+            model=os.environ.get("OLLAMA_MODEL", "qwen3:latest"),
             base_url=os.environ.get("OLLAMA_BASE_URL", "http://localhost:11434"),
             temperature=0.7,
             streaming=True,

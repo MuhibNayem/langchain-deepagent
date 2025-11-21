@@ -234,107 +234,111 @@ async def _stream_agent_response(user_input: str, thread_id: str) -> None:
 
         monitor_task = asyncio.create_task(status_task())
 
-        async for chunk in app.astream(
-            stream_input,
-            stream_mode=["messages", "updates"],
-            subgraphs=True,
-            config=config,
-        ):
-            last_event = time.time()
-            if (
-                not isinstance(chunk, tuple)
-                or len(chunk) != 3
-                or chunk[1] not in {"messages", "updates"}
+        try:
+            async for chunk in app.astream(
+                stream_input,
+                stream_mode=["messages", "updates"],
+                subgraphs=True,
+                config=config,
             ):
-                continue
-
-            namespace, stream_mode, data = chunk
-
-            if namespace != current_namespace:
-                _render_namespace_header(namespace)
-                current_namespace = namespace
-
-            if stream_mode == "messages":
-                if not isinstance(data, tuple) or len(data) != 2:
-                    continue
-                message, metadata = data
-
-                # Check for usage metadata
-                if hasattr(message, "usage_metadata") and message.usage_metadata:
-                     _render_usage(message.usage_metadata)
-
-                if isinstance(message, AIMessageChunk):
-                    text = _content_to_text(message.content)
-                    if text:
-                        thought_buffer.append(text)
-                        assistant_line_open = True
-                    if getattr(message, "chunk_position", None) == "last":
-                        buffer_text = "".join(thought_buffer).strip()
-                        if buffer_text:
-                            _render_thinking(buffer_text)
-                        thought_buffer.clear()
-                        assistant_line_open = False
+                last_event = time.time()
+                if (
+                    not isinstance(chunk, tuple)
+                    or len(chunk) != 3
+                    or chunk[1] not in {"messages", "updates"}
+                ):
                     continue
 
-                if isinstance(message, AIMessage):
-                    tool_calls = _get_tool_calls(message)
-                    if tool_calls:
-                        for call in tool_calls:
-                            call_id = call.get("id")
-                            if call_id and call_id in printed_tool_calls:
-                                continue
-                            if call_id:
-                                printed_tool_calls.add(call_id)
-                            
-                            args = _parse_args(call.get("args"))
-                            _render_tool_start(call.get("name", "tool"), args)
-                            if call.get("name") == "task" and isinstance(args, dict):
-                                subagent = args.get("subagent_type") or args.get("name")
-                                if subagent:
-                                    console.print(f"  [yellow]↳ launching subagent: {subagent}[/yellow]")
-                        # Removed continue here to allow text rendering
-                    text = _content_to_text(message.content)
-                    if text:
-                        _render_agent_reply(text)
-                    continue
+                namespace, stream_mode, data = chunk
 
-                if isinstance(message, ToolMessage):
-                    _render_tool_end(message.name, message.content)
-                    continue
+                if namespace != current_namespace:
+                    _render_namespace_header(namespace)
+                    current_namespace = namespace
 
-                if isinstance(message, HumanMessage):
-                    text = _content_to_text(message.content)
-                    if text:
-                        console.print(f"  [yellow]{text}[/yellow]")
-                    continue
+                if stream_mode == "messages":
+                    if not isinstance(data, tuple) or len(data) != 2:
+                        continue
+                    message, metadata = data
 
-            elif stream_mode == "updates":
-                if not isinstance(data, dict):
-                    continue
+                    # Check for usage metadata
+                    if hasattr(message, "usage_metadata") and message.usage_metadata:
+                         _render_usage(message.usage_metadata)
 
-                if "__interrupt__" in data:
-                    interrupt_data = data["__interrupt__"]
-                    if isinstance(interrupt_data, tuple):
-                        interrupt_data = interrupt_data[0]
-                    if hasattr(interrupt_data, "value"):
-                        interrupt_data = interrupt_data.value
-                    if interrupt_data:
-                        interrupt_requests.append(interrupt_data)
+                    if isinstance(message, AIMessageChunk):
+                        text = _content_to_text(message.content)
+                        if text:
+                            thought_buffer.append(text)
+                            assistant_line_open = True
+                        if getattr(message, "chunk_position", None) == "last":
+                            buffer_text = "".join(thought_buffer).strip()
+                            if buffer_text:
+                                _render_thinking(buffer_text)
+                            thought_buffer.clear()
+                            assistant_line_open = False
+                        continue
 
-                for payload in data.values():
-                    if isinstance(payload, dict) and "todos" in payload:
-                        _render_todos(payload["todos"])
+                    if isinstance(message, AIMessage):
+                        tool_calls = _get_tool_calls(message)
+                        if tool_calls:
+                            for call in tool_calls:
+                                call_id = call.get("id")
+                                if call_id and call_id in printed_tool_calls:
+                                    continue
+                                if call_id:
+                                    printed_tool_calls.add(call_id)
+                                
+                                args = _parse_args(call.get("args"))
+                                _render_tool_start(call.get("name", "tool"), args)
+                                if call.get("name") == "task" and isinstance(args, dict):
+                                    subagent = args.get("subagent_type") or args.get("name")
+                                    if subagent:
+                                        console.print(f"  [yellow]↳ launching subagent: {subagent}[/yellow]")
+                            # Removed continue here to allow text rendering
+                        text = _content_to_text(message.content)
+                        if text:
+                            _render_agent_reply(text)
+                        continue
 
-        if interrupt_requests:
+                    if isinstance(message, ToolMessage):
+                        _render_tool_end(message.name, message.content)
+                        continue
+
+                    if isinstance(message, HumanMessage):
+                        text = _content_to_text(message.content)
+                        if text:
+                            console.print(f"  [yellow]{text}[/yellow]")
+                        continue
+
+                elif stream_mode == "updates":
+                    if not isinstance(data, dict):
+                        continue
+
+                    if "__interrupt__" in data:
+                        interrupt_data = data["__interrupt__"]
+                        if isinstance(interrupt_data, tuple):
+                            interrupt_data = interrupt_data[0]
+                        if hasattr(interrupt_data, "value"):
+                            interrupt_data = interrupt_data.value
+                        if interrupt_data:
+                            interrupt_requests.append(interrupt_data)
+
+                    for payload in data.values():
+                        if isinstance(payload, dict) and "todos" in payload:
+                            _render_todos(payload["todos"])
+
+        finally:
             status_running = False
             monitor_task.cancel()
             try:
                 await monitor_task
             except asyncio.CancelledError:
                 pass
+            sys.stdout.write("\r" + " " * (console.width - 1) + "\r")
+            sys.stdout.flush()
             status.stop()
             console.print()
 
+        if interrupt_requests:
             decisions = []
             for request in interrupt_requests:
                 for action in request.get("action_requests", []):
@@ -346,15 +350,7 @@ async def _stream_agent_response(user_input: str, thread_id: str) -> None:
 
             stream_input = Command(resume={"decisions": decisions})
             continue
-        status_running = False
-        monitor_task.cancel()
-        try:
-            await monitor_task
-        except asyncio.CancelledError:
-            pass
-        sys.stdout.write("\r" + " " * (console.width - 1) + "\r")
-        sys.stdout.flush()
-        status.stop()
+        
         break
 
     if assistant_line_open:
@@ -389,7 +385,9 @@ def chat(thread: Optional[str] = typer.Option(None, help="Existing thread ID to 
     while True:
         try:
             user_input = session.prompt([('class:prompt', 'You: ')], style=style, multiline=True, key_bindings=kb)
-        except (KeyboardInterrupt, EOFError):
+        except KeyboardInterrupt:
+            continue
+        except EOFError:
             typer.echo("\nExiting. Goodbye!")
             break
 
@@ -408,6 +406,8 @@ def chat(thread: Optional[str] = typer.Option(None, help="Existing thread ID to 
         console.print("[bold magenta]Agent>[/] ", end="")
         try:
             asyncio.run(_stream_agent_response(user_input, current_thread))
+        except KeyboardInterrupt:
+            console.print("\n[red]🛑 Agent interrupted by user.[/]")
         except Exception as exc:
             console.print(f"\n[red]Agent error:[/] {exc}")
 

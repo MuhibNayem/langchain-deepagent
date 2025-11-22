@@ -14,7 +14,6 @@ from langchain_community.tools.file_management.move import MoveFileTool
 from langchain_community.tools.file_management.read import ReadFileTool
 from langchain_community.tools.file_management.write import WriteFileTool
 
-from .config.checkpointer import create_checkpointer
 from .config.env import load_project_env
 from .py_tools.registry import PY_TOOL_REGISTRY
 
@@ -163,30 +162,6 @@ def get_llm():
 
 llm = get_llm()
 
-LANGGRAPH_PLATFORM_ENV_KEYS = {
-    "LANGGRAPH_API_BASE",
-    "LANGGRAPH_API_KEY",
-    "LANGGRAPH_PROJECT_ID",
-    "LANGGRAPH_CLOUD",
-    "LANGGRAPH_DEPLOYMENT",
-    "LANGGRAPH_GATEWAY_URL",
-    "LANGGRAPH_PLATFORM",
-}
-
-
-def should_use_custom_checkpointer() -> bool:
-    """Determine if a custom checkpointer should be attached.
-
-    LangGraph Cloud / `langgraph dev` handle persistence automatically, so we skip
-    the custom checkpointer whenever platform-related environment variables are present.
-    Users can also override via DISABLE_CUSTOM_CHECKPOINTER=1.
-    """
-    flag = os.environ.get("DISABLE_CUSTOM_CHECKPOINTER")
-    if flag and flag.lower() in {"1", "true", "yes"}:
-        return False
-    return not any(os.environ.get(key) for key in LANGGRAPH_PLATFORM_ENV_KEYS)
-
-
 agent_kwargs = {
     "model": llm,
     "tools": ALL_BASE_TOOLS,
@@ -203,8 +178,5 @@ agent_kwargs = {
         "critical_operation": {"allowed_decisions": ["approve"]},
     },
 }
-
-if should_use_custom_checkpointer():
-    agent_kwargs["checkpointer"] = create_checkpointer()
 
 app = create_deep_agent(**agent_kwargs)

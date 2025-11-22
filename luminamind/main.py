@@ -1,8 +1,9 @@
-import subprocess
 import asyncio
 import json
 import sys
 import time
+from pathlib import Path
+import subprocess
 from typing import Any, Iterable, Optional
 
 import questionary
@@ -480,7 +481,12 @@ def main(ctx: typer.Context):
             chat(None)
         elif choice == "LangGraph Dev":
             console.print("[green]Starting LangGraph Dev Server...[/green]")
-            subprocess.run(["langgraph", "dev"])
+            project_root = Path(__file__).resolve().parents[1]
+            config_path = project_root / "langgraph.json"
+            if not config_path.exists():
+                console.print(f"[red]langgraph.json not found at {config_path}[/red]")
+                raise typer.Exit(code=1)
+            subprocess.run(["langgraph", "dev", "--config", str(config_path)])
 
 
 @cli.command()

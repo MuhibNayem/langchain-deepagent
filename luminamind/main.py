@@ -401,6 +401,17 @@ async def _stream_agent_response(user_input: str, thread_id: str, session_approv
                 status.stop()
             console.print()
 
+        # Check for interrupts in the state if none were caught in the stream
+        if not interrupt_requests:
+            state = await app.aget_state(config)
+            if state.tasks:
+                for task in state.tasks:
+                    if task.interrupts:
+                        for interrupt in task.interrupts:
+                            val = interrupt.value
+                            if val:
+                                interrupt_requests.append(val)
+
         if interrupt_requests:
             decisions = []
             for request in interrupt_requests:

@@ -189,10 +189,16 @@ agent_kwargs = {
     "tools": ALL_BASE_TOOLS,
     "system_prompt": SYSTEM_PROMPT,
     "subagents": build_subagents(),
-    "interrupt_on":{
-        "delete_file": {"allowed_decisions": ["approve", "edit", "reject"]},
+    "interrupt_on": {
+        "file_delete": {"allowed_decisions": ["approve", "edit", "reject"]},
+        "shell": {"allowed_decisions": ["approve", "edit", "reject"]},
+        "write_file": {"allowed_decisions": ["approve", "edit", "reject"]},
+        "copy_file": {"allowed_decisions": ["approve", "edit", "reject"]},
+        "move_file": {"allowed_decisions": ["approve", "edit", "reject"]},
+        "apply_patch": {"allowed_decisions": ["approve", "edit", "reject"]},
+        "multi_replace_in_file": {"allowed_decisions": ["approve", "edit", "reject"]},
         "critical_operation": {"allowed_decisions": ["approve"]},
-        },
+    },
 }
 
 if should_use_custom_checkpointer():

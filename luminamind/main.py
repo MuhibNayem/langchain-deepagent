@@ -29,8 +29,10 @@ from prompt_toolkit.styles import Style
 from prompt_toolkit.formatted_text import HTML
 from prompt_toolkit.key_binding import KeyBindings
 
+from deepagents import create_deep_agent
+from .config.checkpointer import create_checkpointer
 from .config.env import load_project_env
-from .deep_agent import app
+from .deep_agent import app as default_app, agent_kwargs
 
 console = Console()
 cli = typer.Typer(help="Interactive Deep Agent CLI", invoke_without_command=True)
@@ -131,7 +133,7 @@ def _render_todos(todos: list[dict]) -> None:
 
 
 
-def _prompt_for_approval(action: dict) -> bool:
+async def _prompt_for_approval(action: dict) -> str:
     description = action.get("description", "Tool action requires approval.")
     args_text = _stringify(action.get("args") or action.get("arguments"), 200)
     console.print(
@@ -141,7 +143,22 @@ def _prompt_for_approval(action: dict) -> bool:
             border_style="red",
         )
     )
-    return Confirm.ask("\nApprove this action?", default=True)
+    return await questionary.select(
+        "Select action:",
+        choices=["Approve", "Approve for Session", "Reject"],
+        style=questionary.Style([
+            ('qmark', 'fg:#673ab7 bold'),
+            ('question', 'bold'),
+            ('answer', 'fg:#f44336 bold'),
+            ('pointer', 'fg:#673ab7 bold'),
+            ('highlighted', 'fg:#673ab7 bold'),
+            ('selected', 'fg:#cc5454'),
+            ('separator', 'fg:#cc5454'),
+            ('instruction', ''),
+            ('text', ''),
+            ('disabled', 'fg:#858585 italic')
+        ])
+    ).ask_async()
 
 
 def _render_agent_reply(text: str) -> None:
@@ -189,7 +206,7 @@ def _render_usage(usage: dict) -> None:
     console.print(f"  {usage_text}")
 
 
-async def _stream_agent_response(user_input: str, thread_id: str) -> None:
+async def _stream_agent_response(user_input: str, thread_id: str, session_approved_tools: set, app: Any) -> None:
     """Stream the agent response with tool + HITL visibility."""
     stream_input: Any = {"messages": [{"role": "user", "content": user_input}]}
     config: RunnableConfig = {
@@ -343,8 +360,20 @@ async def _stream_agent_response(user_input: str, thread_id: str) -> None:
             decisions = []
             for request in interrupt_requests:
                 for action in request.get("action_requests", []):
-                    approved = _prompt_for_approval(action)
-                    if approved:
+                    tool_name = action.get("name")
+                    
+                    if tool_name and tool_name in session_approved_tools:
+                        console.print(f"  [dim]Auto-approved {tool_name} (Session)[/dim]")
+                        decisions.append({"type": "approve"})
+                        continue
+
+                    choice = await _prompt_for_approval(action)
+                    
+                    if choice == "Approve":
+                        decisions.append({"type": "approve"})
+                    elif choice == "Approve for Session":
+                        if tool_name:
+                            session_approved_tools.add(tool_name)
                         decisions.append({"type": "approve"})
                     else:
                         decisions.append({"type": "reject", "message": "Rejected by user"})
@@ -400,6 +429,12 @@ def chat(thread: Optional[str] = typer.Option(None, help="Existing thread ID to 
     typer.echo("Deep Agent CLI")
     typer.echo("Type your question. Press Meta+Enter (or Esc then Enter) to submit. Commands: /exit, /reset")
 
+    app = default_app
+    if app.checkpointer is None:
+        console.print("[dim]Initializing local checkpointer for CLI mode...[/dim]")
+        cp = create_checkpointer()
+        app = create_deep_agent(**agent_kwargs, checkpointer=cp)
+
     session = PromptSession(history=InMemoryHistory())
     style = Style.from_dict({
         'prompt': 'bold cyan',
@@ -407,6 +442,7 @@ def chat(thread: Optional[str] = typer.Option(None, help="Existing thread ID to 
 
     kb = KeyBindings()
     last_interrupt_time = 0.0
+    session_approved_tools = set()
 
     @kb.add('enter')
     def _(event):
@@ -440,12 +476,13 @@ def chat(thread: Optional[str] = typer.Option(None, help="Existing thread ID to 
             break
         if lowered == "/reset":
             current_thread = str(uuid7())
+            session_approved_tools.clear()
             typer.echo("🔄 Started a new conversation.")
             continue
 
         console.print("[bold magenta]Agent>[/] ", end="")
         try:
-            asyncio.run(_stream_agent_response(user_input, current_thread))
+            asyncio.run(_stream_agent_response(user_input, current_thread, session_approved_tools, app))
         except KeyboardInterrupt:
             console.print("\n[red]🛑 Agent interrupted by user.[/]")
         except Exception as exc:

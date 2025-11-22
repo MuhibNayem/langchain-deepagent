@@ -1,9 +1,11 @@
+import subprocess
 import asyncio
 import json
 import sys
 import time
 from typing import Any, Iterable, Optional
 
+import questionary
 import typer
 from langchain_core.messages import (
     AIMessage,
@@ -27,11 +29,13 @@ from prompt_toolkit.styles import Style
 from prompt_toolkit.formatted_text import HTML
 from prompt_toolkit.key_binding import KeyBindings
 
+from deepagents import create_deep_agent
+from .config.checkpointer import create_checkpointer
 from .config.env import load_project_env
-from .deep_agent import app
+from .deep_agent import app as default_app, agent_kwargs
 
 console = Console()
-cli = typer.Typer(help="Interactive Deep Agent CLI")
+cli = typer.Typer(help="Interactive Deep Agent CLI", invoke_without_command=True)
 
 STATUS_PHRASES = [
     "Coding is 90% debugging, 10% writing bugs.",
@@ -99,19 +103,76 @@ def _render_namespace_header(namespace: tuple[str, ...]) -> None:
     
     if not labels:
         return
-
+ 
     header_text = " > ".join(labels)
     console.print(f"\n[bold blue]🤖 {header_text}[/]")
 
 
-def _render_tool_start(name: str, args: Any) -> None:
-    args_text = _stringify(args, limit=200)
-    console.print(f"  [magenta]├─ ⚙️ {name}[/magenta] [dim]{args_text}[/dim]")
+def _render_tool_start(name: str, args: Any, call_id: str = None) -> None:
+    from rich.tree import Tree
+    
+    tree = Tree(f"[bold magenta]🔧 {name}[/]", guide_style="dim")
+    
+    # Add input branch
+    input_str = _stringify(args, limit=500)
+    if len(input_str) > 100:
+        # Pretty print for long inputs
+        try:
+            formatted = json.dumps(json.loads(input_str) if isinstance(args, str) else args, indent=2, ensure_ascii=False)
+            input_branch = tree.add("[cyan]Input:[/]")
+            for line in formatted.split('\n'):
+                if line.strip():
+                    input_branch.add(f"[dim]{line}[/]")
+        except:
+            tree.add(f"[cyan]Input:[/] [dim]{input_str}[/]")
+    else:
+        tree.add(f"[cyan]Input:[/] [dim]{input_str}[/]")
+    
+    # Store tool info for later output rendering
+    if call_id:
+        _active_tool_trees[call_id] = {"name": name, "args": args}
 
 
-def _render_tool_end(name: str, result: Any) -> None:
-    result_text = _stringify(result, limit=240)
-    console.print(f"  [green]└─ ✅ {name}[/green] [dim]{result_text}[/dim]")
+def _render_tool_end(name: str, result: Any, call_id: str = None) -> None:
+    from rich.tree import Tree
+    
+    result_str = _stringify(result, limit=500)
+    
+    # Try to get the stored tool info
+    tool_info = _active_tool_trees.pop(call_id, None) if call_id else None
+    
+    if tool_info:
+        # Create a complete tree with both input and output
+        tree = Tree(f"[bold green]✓ {tool_info['name']}[/]", guide_style="dim")
+        
+        # Add input (concise version)
+        input_str = _stringify(tool_info['args'], limit=100)
+        tree.add(f"[cyan]Input:[/] [dim]{input_str}[/]")
+        
+        # Add output
+        if len(result_str) > 100:
+            try:
+                formatted = json.dumps(json.loads(result_str) if isinstance(result, str) else result, indent=2, ensure_ascii=False)
+                output_branch = tree.add("[green]Output:[/]")
+                for line in formatted.split('\n')[:20]:
+                    if line.strip():
+                        output_branch.add(f"[dim]{line}[/]")
+                if formatted.count('\n') > 20:
+                    output_branch.add("[dim]... (truncated)[/]")
+            except:
+                tree.add(f"[green]Output:[/] [dim]{result_str}[/]")
+        else:
+            tree.add(f"[green]Output:[/] [dim]{result_str}[/]")
+        console.print(tree)
+    else:
+        # Fallback: create a simple output-only tree
+        tree = Tree(f"[bold green]✓ {name}[/]", guide_style="dim")
+        tree.add(f"[green]Output:[/] [dim]{result_str}[/]")
+        console.print(tree)
+
+
+# Global dictionary to track active tool trees
+_active_tool_trees = {}
 
 
 def _render_todos(todos: list[dict]) -> None:
@@ -129,7 +190,7 @@ def _render_todos(todos: list[dict]) -> None:
 
 
 
-def _prompt_for_approval(action: dict) -> bool:
+async def _prompt_for_approval(action: dict) -> str:
     description = action.get("description", "Tool action requires approval.")
     args_text = _stringify(action.get("args") or action.get("arguments"), 200)
     console.print(
@@ -139,7 +200,22 @@ def _prompt_for_approval(action: dict) -> bool:
             border_style="red",
         )
     )
-    return Confirm.ask("\nApprove this action?", default=True)
+    return await questionary.select(
+        "Select action:",
+        choices=["Approve", "Approve for Session", "Reject"],
+        style=questionary.Style([
+            ('qmark', 'fg:#673ab7 bold'),
+            ('question', 'bold'),
+            ('answer', 'fg:#f44336 bold'),
+            ('pointer', 'fg:#673ab7 bold'),
+            ('highlighted', 'fg:#673ab7 bold'),
+            ('selected', 'fg:#cc5454'),
+            ('separator', 'fg:#cc5454'),
+            ('instruction', ''),
+            ('text', ''),
+            ('disabled', 'fg:#858585 italic')
+        ])
+    ).ask_async()
 
 
 def _render_agent_reply(text: str) -> None:
@@ -187,7 +263,7 @@ def _render_usage(usage: dict) -> None:
     console.print(f"  {usage_text}")
 
 
-async def _stream_agent_response(user_input: str, thread_id: str) -> None:
+async def _stream_agent_response(user_input: str, thread_id: str, session_approved_tools: set, app: Any) -> None:
     """Stream the agent response with tool + HITL visibility."""
     stream_input: Any = {"messages": [{"role": "user", "content": user_input}]}
     config: RunnableConfig = {
@@ -195,8 +271,9 @@ async def _stream_agent_response(user_input: str, thread_id: str) -> None:
         "recursion_limit": 600,
     }
 
-    current_namespace = None
+    current_namespace = "Agent"
     printed_tool_calls = set()
+    streamed_messages = set()
 
     while True:
         interrupt_requests: list[dict] = []
@@ -232,88 +309,78 @@ async def _stream_agent_response(user_input: str, thread_id: str) -> None:
         monitor_task = asyncio.create_task(status_task())
 
         try:
-            async for chunk in app.astream(
+            async for event in app.astream_events(
                 stream_input,
-                stream_mode=["messages", "updates"],
-                subgraphs=True,
+                version="v2",
                 config=config,
             ):
                 last_event = time.time()
-                if (
-                    not isinstance(chunk, tuple)
-                    or len(chunk) != 3
-                    or chunk[1] not in {"messages", "updates"}
-                ):
+                
+                if event["event"] == "on_tool_start" and event["name"] == "task":
+                    subagent_type = event["data"]["input"]["subagent_type"]
+                    if current_namespace != subagent_type:
+                        current_namespace = subagent_type
+                        _render_namespace_header((current_namespace,))
+                elif event["event"] == "on_tool_end" and event["name"] == "task":
+                    if current_namespace != "Agent":
+                        current_namespace = "Agent"
+                        _render_namespace_header((current_namespace,))
+                
+                # Handle tool call start events
+                if event["event"] == "on_tool_start":
+                    if status_running:
+                        status.stop()
+                        status_running = False
+                    
+                    tool_name = event.get("name", "tool")
+                    tool_input = event.get("data", {}).get("input", {})
+                    run_id = event.get("run_id")
+                    
+                    _render_tool_start(tool_name, tool_input, run_id)
                     continue
-
-                namespace, stream_mode, data = chunk
-
-                if namespace != current_namespace:
-                    _render_namespace_header(namespace)
-                    current_namespace = namespace
-
-                if stream_mode == "messages":
-                    if not isinstance(data, tuple) or len(data) != 2:
-                        continue
-                    message, metadata = data
-
-                    # Check for usage metadata for non-chunks
-                    if not isinstance(message, AIMessageChunk) and hasattr(message, "usage_metadata") and message.usage_metadata:
-                         _render_usage(message.usage_metadata)
-
-                    if isinstance(message, AIMessageChunk):
-                        text = _content_to_text(message.content)
+                
+                # Handle tool call end events
+                if event["event"] == "on_tool_end":
+                    tool_name = event.get("name", "tool")
+                    tool_output = event.get("data", {}).get("output")
+                    run_id = event.get("run_id")
+                    
+                    _render_tool_end(tool_name, tool_output, run_id)
+                    continue
+                
+                #Handle streaming token events from LLM
+                if event["event"] == "on_chat_model_stream":
+                    chunk_data = event.get("data", {})
+                    chunk = chunk_data.get("chunk")
+                    if chunk and hasattr(chunk, "content"):
+                        text = _content_to_text(chunk.content)
                         if text:
-                            status.stop() # Stop the spinner only if we have text to print
-                            console.print(text, end="")
-                            # Force flush to ensure immediate display
+                            if status_running:
+                                status.stop()
+                                status_running = False
+                            sys.stdout.write(text)
                             sys.stdout.flush()
                             assistant_line_open = True
-                        if getattr(message, "chunk_position", None) == "last":
-                            console.print()
-                            assistant_line_open = False
-                            if hasattr(message, "usage_metadata") and message.usage_metadata:
-                                _render_usage(message.usage_metadata)
-                        continue
-
-                    if isinstance(message, AIMessage):
-                        tool_calls = _get_tool_calls(message)
-                        if tool_calls:
-                            for call in tool_calls:
-                                call_id = call.get("id")
-                                if call_id and call_id in printed_tool_calls:
-                                    continue
-                                if call_id:
-                                    printed_tool_calls.add(call_id)
-                                
-                                args = _parse_args(call.get("args"))
-                                _render_tool_start(call.get("name", "tool"), args)
-                                if call.get("name") == "task" and isinstance(args, dict):
-                                    subagent = args.get("subagent_type") or args.get("name")
-                                    if subagent:
-                                        console.print(f"  [yellow]↳ launching subagent: {subagent}[/yellow]")
-                            # Removed continue here to allow text rendering
-                        text = _content_to_text(message.content)
-                        if text:
-                            _render_agent_reply(text)
-                        continue
-
-                    if isinstance(message, ToolMessage):
-                        _render_tool_end(message.name, message.content)
-                        continue
-
-                    if isinstance(message, HumanMessage):
-                        text = _content_to_text(message.content)
-                        if text:
-                            console.print(f"  [yellow]{text}[/yellow]")
-                        continue
-
-                elif stream_mode == "updates":
-                    if not isinstance(data, dict):
-                        continue
-
-                    if "__interrupt__" in data:
-                        interrupt_data = data["__interrupt__"]
+                    continue
+                
+                # Handle LLM completion
+                if event["event"] == "on_chat_model_end":
+                    if assistant_line_open:
+                        sys.stdout.write("\n")
+                        sys.stdout.flush()
+                        assistant_line_open = False
+                    
+                    # Show usage if available
+                    output_data = event.get("data", {}).get("output", {})
+                    if hasattr(output_data, "usage_metadata") and output_data.usage_metadata:
+                        _render_usage(output_data.usage_metadata)
+                    continue
+                
+                # Handle interrupts
+                if event["event"] == "on_chain_end":
+                    chain_output = event.get("data", {}).get("output", {})
+                    if isinstance(chain_output, dict) and "__interrupt__" in chain_output:
+                        interrupt_data = chain_output["__interrupt__"]
                         if isinstance(interrupt_data, tuple):
                             interrupt_data = interrupt_data[0]
                         if hasattr(interrupt_data, "value"):
@@ -321,28 +388,37 @@ async def _stream_agent_response(user_input: str, thread_id: str) -> None:
                         if interrupt_data:
                             interrupt_requests.append(interrupt_data)
 
-                    for payload in data.values():
-                        if isinstance(payload, dict) and "todos" in payload:
-                            _render_todos(payload["todos"])
-
         finally:
-            status_running = False
-            monitor_task.cancel()
-            try:
-                await monitor_task
-            except asyncio.CancelledError:
-                pass
-            sys.stdout.write("\r" + " " * (console.width - 1) + "\r")
-            sys.stdout.flush()
-            status.stop()
+            if status_running:
+                status_running = False
+                monitor_task.cancel()
+                try:
+                    await monitor_task
+                except asyncio.CancelledError:
+                    pass
+                sys.stdout.write("\r" + " " * (console.width - 1) + "\r")
+                sys.stdout.flush()
+                status.stop()
             console.print()
 
         if interrupt_requests:
             decisions = []
             for request in interrupt_requests:
                 for action in request.get("action_requests", []):
-                    approved = _prompt_for_approval(action)
-                    if approved:
+                    tool_name = action.get("name")
+                    
+                    if tool_name and tool_name in session_approved_tools:
+                        console.print(f"  [dim]Auto-approved {tool_name} (Session)[/dim]")
+                        decisions.append({"type": "approve"})
+                        continue
+
+                    choice = await _prompt_for_approval(action)
+                    
+                    if choice == "Approve":
+                        decisions.append({"type": "approve"})
+                    elif choice == "Approve for Session":
+                        if tool_name:
+                            session_approved_tools.add(tool_name)
                         decisions.append({"type": "approve"})
                     else:
                         decisions.append({"type": "reject", "message": "Rejected by user"})
@@ -355,6 +431,37 @@ async def _stream_agent_response(user_input: str, thread_id: str) -> None:
     if assistant_line_open:
         console.print()
 
+@cli.callback(invoke_without_command=True)
+def main(ctx: typer.Context):
+    """
+    LuminaMind: Deep Agent CLI & Dev Server Launcher.
+    """
+    if ctx.invoked_subcommand is None:
+        console.print(Panel.fit("[bold cyan]Welcome to LuminaMind[/bold cyan]", border_style="cyan"))
+        
+        choice = questionary.select(
+            "Select mode:",
+            choices=["CLI Chat", "LangGraph Dev"],
+            style=questionary.Style([
+                ('qmark', 'fg:#673ab7 bold'),       # token in front of the question
+                ('question', 'bold'),               # question text
+                ('answer', 'fg:#f44336 bold'),      # submitted answer text behind the question
+                ('pointer', 'fg:#673ab7 bold'),     # pointer used in select and checkbox prompts
+                ('highlighted', 'fg:#673ab7 bold'), # pointed-at choice in select and checkbox prompts
+                ('selected', 'fg:#cc5454'),         # style for a selected item of a checkbox
+                ('separator', 'fg:#cc5454'),        # separator in lists
+                ('instruction', ''),                # user instructions for select, rawselect, checkbox
+                ('text', ''),                       # plain text
+                ('disabled', 'fg:#858585 italic')   # disabled choices for select and checkbox prompts
+            ])
+        ).ask()
+        
+        if choice == "CLI Chat":
+            chat(None)
+        elif choice == "LangGraph Dev":
+            console.print("[green]Starting LangGraph Dev Server...[/green]")
+            subprocess.run(["langgraph", "dev"])
+
 
 @cli.command()
 def chat(thread: Optional[str] = typer.Option(None, help="Existing thread ID to resume.")) -> None:
@@ -366,6 +473,12 @@ def chat(thread: Optional[str] = typer.Option(None, help="Existing thread ID to 
     typer.echo("Deep Agent CLI")
     typer.echo("Type your question. Press Meta+Enter (or Esc then Enter) to submit. Commands: /exit, /reset")
 
+    app = default_app
+    if app.checkpointer is None:
+        console.print("[dim]Initializing local checkpointer for CLI mode...[/dim]")
+        cp = create_checkpointer()
+        app = create_deep_agent(**agent_kwargs, checkpointer=cp)
+
     session = PromptSession(history=InMemoryHistory())
     style = Style.from_dict({
         'prompt': 'bold cyan',
@@ -373,6 +486,7 @@ def chat(thread: Optional[str] = typer.Option(None, help="Existing thread ID to 
 
     kb = KeyBindings()
     last_interrupt_time = 0.0
+    session_approved_tools = set()
 
     @kb.add('enter')
     def _(event):
@@ -406,12 +520,13 @@ def chat(thread: Optional[str] = typer.Option(None, help="Existing thread ID to 
             break
         if lowered == "/reset":
             current_thread = str(uuid7())
+            session_approved_tools.clear()
             typer.echo("🔄 Started a new conversation.")
             continue
 
         console.print("[bold magenta]Agent>[/] ", end="")
         try:
-            asyncio.run(_stream_agent_response(user_input, current_thread))
+            asyncio.run(_stream_agent_response(user_input, current_thread, session_approved_tools, app))
         except KeyboardInterrupt:
             console.print("\n[red]🛑 Agent interrupted by user.[/]")
         except Exception as exc:

@@ -30,6 +30,8 @@ rich = "^14.2.0"
 prompt_toolkit = "^3.0.48"
 langchain-ollama = "^1.0.0"
 langgraph-cli = {extras = ["inmem"], version = "^0.4.7"}
+patch-ng = "^1.19.0"
+questionary = "^2.1.1"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^9.0.1"

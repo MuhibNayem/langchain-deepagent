@@ -59,7 +59,9 @@ SYSTEM_PROMPT = """You are a deep autonomy agent that plans, researches, and edi
 - Prefer the shell tool for commands that combine multiple steps.
 - Keep track of what each subagent is tackling so you can coordinate work.
 - Always summarize changes before finishing.
-- CRITICAL: Before stopping, verify that ALL items in your todo list are completed. Do not stop if there are pending tasks.
+- CRITICAL: 
+    - Before stopping, verify that ALL items in your todo list are completed. Do not stop if there are pending tasks.
+    - Always use the designated subagent to perform the task. Never do the task yourself.
 """
 
 WEB_RESEARCH_SUBAGENT_PROMPT = """You are a focused research specialist.

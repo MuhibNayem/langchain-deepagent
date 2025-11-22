@@ -128,9 +128,6 @@ def _render_tool_start(name: str, args: Any, call_id: str = None) -> None:
     else:
         tree.add(f"[cyan]Input:[/] [dim]{input_str}[/]")
     
-    # Render immediately to show input
-    console.print(tree)
-    
     # Store tool info for later output rendering
     if call_id:
         _active_tool_trees[call_id] = {"name": name, "args": args}
@@ -274,7 +271,7 @@ async def _stream_agent_response(user_input: str, thread_id: str, session_approv
         "recursion_limit": 600,
     }
 
-    current_namespace = None
+    current_namespace = "Agent"
     printed_tool_calls = set()
     streamed_messages = set()
 
@@ -318,6 +315,16 @@ async def _stream_agent_response(user_input: str, thread_id: str, session_approv
                 config=config,
             ):
                 last_event = time.time()
+                
+                if event["event"] == "on_tool_start" and event["name"] == "task":
+                    subagent_type = event["data"]["input"]["subagent_type"]
+                    if current_namespace != subagent_type:
+                        current_namespace = subagent_type
+                        _render_namespace_header((current_namespace,))
+                elif event["event"] == "on_tool_end" and event["name"] == "task":
+                    if current_namespace != "Agent":
+                        current_namespace = "Agent"
+                        _render_namespace_header((current_namespace,))
                 
                 # Handle tool call start events
                 if event["event"] == "on_tool_start":
@@ -423,7 +430,6 @@ async def _stream_agent_response(user_input: str, thread_id: str, session_approv
 
     if assistant_line_open:
         console.print()
-
 
 @cli.callback(invoke_without_command=True)
 def main(ctx: typer.Context):

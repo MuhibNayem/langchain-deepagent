@@ -112,12 +112,6 @@ def build_subagents():
             registry_tool("os_info"),
         ],
     }
-    general_purpose_agent = {
-        "name": "general-purpose",
-        "description": "Use for multi-step reasoning, planning, and dispatching work.",
-        "system_prompt": SYSTEM_PROMPT,
-        "tools": ALL_BASE_TOOLS,
-    }
     greeting_agent = {
         "name": "greeting-responder",
         "description": "Use for crafting friendly greetings, jokes, and casual replies.",
@@ -126,16 +120,15 @@ def build_subagents():
     }
     return [
         greeting_agent,
-        general_purpose_agent,
         research_agent,
         {
             **research_agent,
-            "name": "research-analyst",
+            "name": "web-research-analyst",
         },
         code_executor_agent,
         {
             **code_executor_agent,
-            "name": "executor",
+            "name": "code-executor",
         },
     ]
 

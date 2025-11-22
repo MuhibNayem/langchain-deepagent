@@ -2,8 +2,10 @@ import asyncio
 import json
 import sys
 import time
-from pathlib import Path
 import subprocess
+from contextlib import contextmanager
+from importlib import resources
+from pathlib import Path
 from typing import Any, Iterable, Optional
 
 import questionary
@@ -174,6 +176,26 @@ def _render_tool_end(name: str, result: Any, call_id: str = None) -> None:
 
 # Global dictionary to track active tool trees
 _active_tool_trees = {}
+
+
+@contextmanager
+def _langgraph_config_file() -> Iterable[Path]:
+    """Locate langgraph.json from the installed package or repo root."""
+    try:
+        pkg_resource = resources.files("luminamind").joinpath("langgraph.json")
+        with resources.as_file(pkg_resource) as pkg_path:
+            if pkg_path.exists():
+                yield pkg_path
+                return
+    except (FileNotFoundError, ModuleNotFoundError):
+        pass
+
+    fallback = Path(__file__).resolve().parents[1] / "langgraph.json"
+    if fallback.exists():
+        yield fallback
+        return
+
+    raise FileNotFoundError(f"langgraph.json not found in package resources or at {fallback}")
 
 
 def _render_todos(todos: list[dict]) -> None:
@@ -481,12 +503,12 @@ def main(ctx: typer.Context):
             chat(None)
         elif choice == "LangGraph Dev":
             console.print("[green]Starting LangGraph Dev Server...[/green]")
-            project_root = Path(__file__).resolve().parents[1]
-            config_path = project_root / "langgraph.json"
-            if not config_path.exists():
-                console.print(f"[red]langgraph.json not found at {config_path}[/red]")
+            try:
+                with _langgraph_config_file() as config_path:
+                    subprocess.run(["langgraph", "dev", "--config", str(config_path)])
+            except FileNotFoundError as exc:
+                console.print(f"[red]{exc}[/red]")
                 raise typer.Exit(code=1)
-            subprocess.run(["langgraph", "dev", "--config", str(config_path)])
 
 
 @cli.command()

@@ -1,0 +1,9 @@
+{
+    "dependencies": [
+        "."
+    ],
+    "graphs": {
+        "luminamind": "luminamind.deep_agent:app"
+    },
+    "env": ".env"
+}

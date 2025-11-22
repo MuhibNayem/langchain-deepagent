@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 import re
 from typing import Any, Dict, List, Optional, Tuple
+import ollama
 
 import requests
 from langchain.tools import tool
@@ -10,6 +11,8 @@ from langchain.tools import tool
 from ..config.env import load_project_env
 
 load_project_env()
+
+DEFAULT_LIMIT = 3
 
 AGENT_UA = "langgraph-agent/1.0"
 SERPER_API_KEY = os.environ.get("SERPER_API_KEY")
@@ -21,7 +24,6 @@ GOOGLE_CSE_ID = (
 )
 GOOGLE_REFERER = os.environ.get("GOOGLE_REFERER") or os.environ.get("GOOGLE_REFERRER")
 OLLAMA_HOST = os.environ.get("OLLAMA_HOST")
-DEFAULT_LIMIT = 5
 DEBUG = os.environ.get("DEBUG_WEB_SEARCH") == "1"
 
 
@@ -61,7 +63,7 @@ def _search_google_cse(query: str, limit: Optional[int]) -> Dict[str, Any]:
         "safe": "off",
     }
     if limit:
-        params["num"] = str(min(limit, 10))
+        params["num"] = str(min(limit, 3))
 
     headers = {"User-Agent": AGENT_UA}
     if GOOGLE_REFERER:
@@ -95,7 +97,7 @@ def _search_serper(query: str, limit: Optional[int]) -> Dict[str, Any]:
     if not SERPER_API_KEY:
         return {"skipped": True, "message": "SERPER_API_KEY not set"}
 
-    body = {"q": query, "num": limit or DEFAULT_LIMIT}
+    body = {"q": query, "num": limit or DEFAULT_LIMIT or 3}
     headers = {
         "X-API-KEY": SERPER_API_KEY,
         "Content-Type": "application/json",
@@ -127,39 +129,28 @@ def _search_serper(query: str, limit: Optional[int]) -> Dict[str, Any]:
     return {"error": False, "engine": "serper", "results": _prune_results(results, limit)}
 
 
-def _search_ollama(query: str, limit: Optional[int]) -> Dict[str, Any]:
-    base_url = OLLAMA_HOST or "http://127.0.0.1:11434"
-    if not re.match(r"^https?://", base_url):
-        base_url = f"http://{base_url}"
-    url = f"{base_url.rstrip('/')}/api/search"
-    payload = {"query": query, "max_results": limit or DEFAULT_LIMIT}
-
+def search_ollama(query: str, limit: Optional[int] = None) -> Dict[str, Any]:
     try:
-        response = requests.post(url, json=payload, timeout=60)
-        if response.status_code == 404:
-            return {"error": True, "message": "ollama search endpoint not available"}
-        response.raise_for_status()
-    except requests.RequestException as exc:
-        return {"error": True, "message": f"ollama_search {exc}"}
+        res = ollama.web_search( 
+            query=query,
+            max_results=limit or DEFAULT_LIMIT,
+        )
 
-    data = response.json()
-    items = data.get("results") or data.get("data") or []
-    if not isinstance(items, list):
-        return {"error": True, "message": "ollama_search returned unexpected payload"}
+        results = getattr(res, "results", None) or res.get("results") or []
+        if not results:
+            return {"error": True, "engine": "ollama_web_search", "message": "ollama returned no results"}
 
-    results = _normalize_results(items)
-    if not results:
-        return {"error": True, "message": "ollama returned no results"}
+        return {"error": False, "engine": "ollama_web_search", "results": results}
 
-    return {"error": False, "engine": "ollama_search", "results": _prune_results(results, limit)}
-
+    except Exception as exc:
+        return {"error": True, "engine": "ollama_web_search", "message": f"web_search failed: {exc}"}
 
 def _run_fallback_search(query: str, limit: Optional[int]) -> Dict[str, Any]:
     attempts: List[str] = []
     providers: List[Tuple[str, Any]] = [
         ("google_cse", _search_google_cse),
         ("serper", _search_serper),
-        ("ollama_search", _search_ollama),
+        ("ollama_search", search_ollama),
     ]
 
     for name, fn in providers:

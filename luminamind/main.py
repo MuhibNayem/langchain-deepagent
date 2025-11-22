@@ -336,6 +336,12 @@ async def _stream_agent_response(user_input: str, thread_id: str, session_approv
                     tool_input = event.get("data", {}).get("input", {})
                     run_id = event.get("run_id")
                     
+                    if tool_name == "write_todos":
+                        todos = tool_input.get("todos", [])
+                        if todos:
+                            _render_todos(todos)
+                        continue
+                    
                     _render_tool_start(tool_name, tool_input, run_id)
                     continue
                 
@@ -344,6 +350,9 @@ async def _stream_agent_response(user_input: str, thread_id: str, session_approv
                     tool_name = event.get("name", "tool")
                     tool_output = event.get("data", {}).get("output")
                     run_id = event.get("run_id")
+                    
+                    if tool_name == "write_todos":
+                        continue
                     
                     _render_tool_end(tool_name, tool_output, run_id)
                     continue

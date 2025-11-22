@@ -282,8 +282,8 @@ def _render_usage(usage: dict) -> None:
     total_tokens = usage.get("total_tokens", 0)
     remaining_tokens = CONTEXT_WINDOW_LIMIT - total_tokens
     
-    usage_text = f"[dim]Tokens: {input_tokens} in / {output_tokens} out / {total_tokens} total / {remaining_tokens} remaining[/dim]"
-    console.print(f"  {usage_text}")
+    usage_text = f"\n[dim]Tokens: {input_tokens} in / {output_tokens} out / {total_tokens} total / {remaining_tokens} remaining[/dim]"
+    console.print(f"\n{usage_text}")
 
 
 async def _stream_agent_response(user_input: str, thread_id: str, session_approved_tools: set, app: Any) -> None:
@@ -291,7 +291,7 @@ async def _stream_agent_response(user_input: str, thread_id: str, session_approv
     stream_input: Any = {"messages": [{"role": "user", "content": user_input}]}
     config: RunnableConfig = {
         "configurable": {"thread_id": thread_id},
-        "recursion_limit": 600,
+        "recursion_limit": 1000,
     }
 
     current_namespace = "Agent"
@@ -366,6 +366,12 @@ async def _stream_agent_response(user_input: str, thread_id: str, session_approv
                                     tool_name = tool_call.get("name", "tool")
                                     tool_args = _parse_args(tool_call.get("args", {}))
                                     call_id = tool_call.get("id")
+
+                                    if tool_name == "task" and isinstance(tool_args, dict):
+                                        subagent_type = tool_args.get("subagent_type", "")
+                                        if subagent_type and current_namespace != subagent_type:
+                                            current_namespace = subagent_type
+                                            _render_namespace_header((current_namespace,))
                                     
                                     # Handle write_todos specially
                                     if tool_name == "write_todos" and isinstance(tool_args, dict):
@@ -406,6 +412,10 @@ async def _stream_agent_response(user_input: str, thread_id: str, session_approv
                             # Don't render write_todos results
                             if tool_name != "write_todos":
                                 _render_tool_end(tool_name, content, tool_call_id)
+
+                            if tool_name == "task" and current_namespace != "Agent":
+                                current_namespace = "Agent"
+                                _render_namespace_header((current_namespace,))
 
             if assistant_line_open:
                 sys.stdout.write("\n")

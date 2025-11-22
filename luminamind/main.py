@@ -108,14 +108,74 @@ def _render_namespace_header(namespace: tuple[str, ...]) -> None:
     console.print(f"\n[bold blue]🤖 {header_text}[/]")
 
 
-def _render_tool_start(name: str, args: Any) -> None:
-    args_text = _stringify(args, limit=200)
-    console.print(f"  [magenta]├─ ⚙️ {name}[/magenta] [dim]{args_text}[/dim]")
+def _render_tool_start(name: str, args: Any, call_id: str = None) -> None:
+    from rich.tree import Tree
+    
+    tree = Tree(f"[bold magenta]🔧 {name}[/]", guide_style="dim")
+    
+    # Add input branch
+    input_str = _stringify(args, limit=500)
+    if len(input_str) > 100:
+        # Pretty print for long inputs
+        try:
+            formatted = json.dumps(json.loads(input_str) if isinstance(args, str) else args, indent=2, ensure_ascii=False)
+            input_branch = tree.add("[cyan]Input:[/]")
+            for line in formatted.split('\n'):
+                if line.strip():
+                    input_branch.add(f"[dim]{line}[/]")
+        except:
+            tree.add(f"[cyan]Input:[/] [dim]{input_str}[/]")
+    else:
+        tree.add(f"[cyan]Input:[/] [dim]{input_str}[/]")
+    
+    # Render immediately to show input
+    console.print(tree)
+    
+    # Store tool info for later output rendering
+    if call_id:
+        _active_tool_trees[call_id] = {"name": name, "args": args}
 
 
-def _render_tool_end(name: str, result: Any) -> None:
-    result_text = _stringify(result, limit=240)
-    console.print(f"  [green]└─ ✅ {name}[/green] [dim]{result_text}[/dim]")
+def _render_tool_end(name: str, result: Any, call_id: str = None) -> None:
+    from rich.tree import Tree
+    
+    result_str = _stringify(result, limit=500)
+    
+    # Try to get the stored tool info
+    tool_info = _active_tool_trees.pop(call_id, None) if call_id else None
+    
+    if tool_info:
+        # Create a complete tree with both input and output
+        tree = Tree(f"[bold green]✓ {tool_info['name']}[/]", guide_style="dim")
+        
+        # Add input (concise version)
+        input_str = _stringify(tool_info['args'], limit=100)
+        tree.add(f"[cyan]Input:[/] [dim]{input_str}[/]")
+        
+        # Add output
+        if len(result_str) > 100:
+            try:
+                formatted = json.dumps(json.loads(result_str) if isinstance(result, str) else result, indent=2, ensure_ascii=False)
+                output_branch = tree.add("[green]Output:[/]")
+                for line in formatted.split('\n')[:20]:
+                    if line.strip():
+                        output_branch.add(f"[dim]{line}[/]")
+                if formatted.count('\n') > 20:
+                    output_branch.add("[dim]... (truncated)[/]")
+            except:
+                tree.add(f"[green]Output:[/] [dim]{result_str}[/]")
+        else:
+            tree.add(f"[green]Output:[/] [dim]{result_str}[/]")
+        console.print(tree)
+    else:
+        # Fallback: create a simple output-only tree
+        tree = Tree(f"[bold green]✓ {name}[/]", guide_style="dim")
+        tree.add(f"[green]Output:[/] [dim]{result_str}[/]")
+        console.print(tree)
+
+
+# Global dictionary to track active tool trees
+_active_tool_trees = {}
 
 
 def _render_todos(todos: list[dict]) -> None:
@@ -216,6 +276,7 @@ async def _stream_agent_response(user_input: str, thread_id: str, session_approv
 
     current_namespace = None
     printed_tool_calls = set()
+    streamed_messages = set()
 
     while True:
         interrupt_requests: list[dict] = []
@@ -251,88 +312,68 @@ async def _stream_agent_response(user_input: str, thread_id: str, session_approv
         monitor_task = asyncio.create_task(status_task())
 
         try:
-            async for chunk in app.astream(
+            async for event in app.astream_events(
                 stream_input,
-                stream_mode=["messages", "updates"],
-                subgraphs=True,
+                version="v2",
                 config=config,
             ):
                 last_event = time.time()
-                if (
-                    not isinstance(chunk, tuple)
-                    or len(chunk) != 3
-                    or chunk[1] not in {"messages", "updates"}
-                ):
+                
+                # Handle tool call start events
+                if event["event"] == "on_tool_start":
+                    if status_running:
+                        status.stop()
+                        status_running = False
+                    
+                    tool_name = event.get("name", "tool")
+                    tool_input = event.get("data", {}).get("input", {})
+                    run_id = event.get("run_id")
+                    
+                    _render_tool_start(tool_name, tool_input, run_id)
                     continue
-
-                namespace, stream_mode, data = chunk
-
-                if namespace != current_namespace:
-                    _render_namespace_header(namespace)
-                    current_namespace = namespace
-
-                if stream_mode == "messages":
-                    if not isinstance(data, tuple) or len(data) != 2:
-                        continue
-                    message, metadata = data
-
-                    # Check for usage metadata for non-chunks
-                    if not isinstance(message, AIMessageChunk) and hasattr(message, "usage_metadata") and message.usage_metadata:
-                         _render_usage(message.usage_metadata)
-
-                    if isinstance(message, AIMessageChunk):
-                        text = _content_to_text(message.content)
+                
+                # Handle tool call end events
+                if event["event"] == "on_tool_end":
+                    tool_name = event.get("name", "tool")
+                    tool_output = event.get("data", {}).get("output")
+                    run_id = event.get("run_id")
+                    
+                    _render_tool_end(tool_name, tool_output, run_id)
+                    continue
+                
+                #Handle streaming token events from LLM
+                if event["event"] == "on_chat_model_stream":
+                    chunk_data = event.get("data", {})
+                    chunk = chunk_data.get("chunk")
+                    if chunk and hasattr(chunk, "content"):
+                        text = _content_to_text(chunk.content)
                         if text:
-                            status.stop() # Stop the spinner only if we have text to print
-                            console.print(text, end="")
-                            # Force flush to ensure immediate display
+                            if status_running:
+                                status.stop()
+                                status_running = False
+                            sys.stdout.write(text)
                             sys.stdout.flush()
                             assistant_line_open = True
-                        if getattr(message, "chunk_position", None) == "last":
-                            console.print()
-                            assistant_line_open = False
-                            if hasattr(message, "usage_metadata") and message.usage_metadata:
-                                _render_usage(message.usage_metadata)
-                        continue
-
-                    if isinstance(message, AIMessage):
-                        tool_calls = _get_tool_calls(message)
-                        if tool_calls:
-                            for call in tool_calls:
-                                call_id = call.get("id")
-                                if call_id and call_id in printed_tool_calls:
-                                    continue
-                                if call_id:
-                                    printed_tool_calls.add(call_id)
-                                
-                                args = _parse_args(call.get("args"))
-                                _render_tool_start(call.get("name", "tool"), args)
-                                if call.get("name") == "task" and isinstance(args, dict):
-                                    subagent = args.get("subagent_type") or args.get("name")
-                                    if subagent:
-                                        console.print(f"  [yellow]↳ launching subagent: {subagent}[/yellow]")
-                            # Removed continue here to allow text rendering
-                        text = _content_to_text(message.content)
-                        if text:
-                            _render_agent_reply(text)
-                        continue
-
-                    if isinstance(message, ToolMessage):
-                        _render_tool_end(message.name, message.content)
-                        continue
-
-                    if isinstance(message, HumanMessage):
-                        text = _content_to_text(message.content)
-                        if text:
-                            console.print(f"  [yellow]{text}[/yellow]")
-                        continue
-
-                elif stream_mode == "updates":
-                    if not isinstance(data, dict):
-                        continue
-
-                    if "__interrupt__" in data:
-                        interrupt_data = data["__interrupt__"]
+                    continue
+                
+                # Handle LLM completion
+                if event["event"] == "on_chat_model_end":
+                    if assistant_line_open:
+                        sys.stdout.write("\n")
+                        sys.stdout.flush()
+                        assistant_line_open = False
+                    
+                    # Show usage if available
+                    output_data = event.get("data", {}).get("output", {})
+                    if hasattr(output_data, "usage_metadata") and output_data.usage_metadata:
+                        _render_usage(output_data.usage_metadata)
+                    continue
+                
+                # Handle interrupts
+                if event["event"] == "on_chain_end":
+                    chain_output = event.get("data", {}).get("output", {})
+                    if isinstance(chain_output, dict) and "__interrupt__" in chain_output:
+                        interrupt_data = chain_output["__interrupt__"]
                         if isinstance(interrupt_data, tuple):
                             interrupt_data = interrupt_data[0]
                         if hasattr(interrupt_data, "value"):
@@ -340,20 +381,17 @@ async def _stream_agent_response(user_input: str, thread_id: str, session_approv
                         if interrupt_data:
                             interrupt_requests.append(interrupt_data)
 
-                    for payload in data.values():
-                        if isinstance(payload, dict) and "todos" in payload:
-                            _render_todos(payload["todos"])
-
         finally:
-            status_running = False
-            monitor_task.cancel()
-            try:
-                await monitor_task
-            except asyncio.CancelledError:
-                pass
-            sys.stdout.write("\r" + " " * (console.width - 1) + "\r")
-            sys.stdout.flush()
-            status.stop()
+            if status_running:
+                status_running = False
+                monitor_task.cancel()
+                try:
+                    await monitor_task
+                except asyncio.CancelledError:
+                    pass
+                sys.stdout.write("\r" + " " * (console.width - 1) + "\r")
+                sys.stdout.flush()
+                status.stop()
             console.print()
 
         if interrupt_requests:

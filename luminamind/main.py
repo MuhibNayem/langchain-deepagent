@@ -287,7 +287,7 @@ def _render_usage(usage: dict) -> None:
 
 
 async def _stream_agent_response(user_input: str, thread_id: str, session_approved_tools: set, app: Any) -> None:
-    """Stream the agent response with tool + HITL visibility."""
+    """Stream the agent response with tool + HITL visibility (using astream for guaranteed step completion)."""
     stream_input: Any = {"messages": [{"role": "user", "content": user_input}]}
     config: RunnableConfig = {
         "configurable": {"thread_id": thread_id},
@@ -295,15 +295,13 @@ async def _stream_agent_response(user_input: str, thread_id: str, session_approv
     }
 
     current_namespace = "Agent"
-    printed_tool_calls = set()
-    streamed_messages = set()
+    processed_message_ids = set()
 
     while True:
         interrupt_requests: list[dict] = []
         last_event = time.time()
         assistant_line_open = False
         status_index = 0
-        status_frame = 0
         status_running = True
         status = console.status(
             Text(
@@ -315,110 +313,104 @@ async def _stream_agent_response(user_input: str, thread_id: str, session_approv
         status.start()
 
         async def status_task() -> None:
-            nonlocal status_index, status_frame
+            nonlocal status_index
             while status_running:
                 await asyncio.sleep(0.7)
                 if not status_running:
                     break
                 idle = time.time() - last_event
                 if idle >= 2:
-                    status_frame = (status_frame + 1) 
-                    style = "bold magenta"
                     status_index = (status_index + 1) % len(STATUS_PHRASES)
-                    status.update(Text(f"{STATUS_PHRASES[status_index]}", style=style))
+                    status.update(Text(f"{STATUS_PHRASES[status_index]}", style="bold magenta"))
                 else:
                     status.update(Text("", style="magenta"))
 
         monitor_task = asyncio.create_task(status_task())
 
         try:
-            async for event in app.astream_events(
-                stream_input,
-                version="v2",
-                config=config,
-            ):
+            # Use astream instead of astream_events to ensure step completion
+            async for chunk in app.astream(stream_input, config, stream_mode="updates"):
                 last_event = time.time()
                 
-                if event["event"] == "on_tool_start" and event["name"] == "task":
-                    subagent_type = event["data"]["input"]["subagent_type"]
-                    if current_namespace != subagent_type:
-                        current_namespace = subagent_type
-                        _render_namespace_header((current_namespace,))
-                elif event["event"] == "on_tool_end" and event["name"] == "task":
-                    if current_namespace != "Agent":
-                        current_namespace = "Agent"
-                        _render_namespace_header((current_namespace,))
-                
-                # Handle tool call start events
-                if event["event"] == "on_tool_start":
-                    if status_running:
-                        status.stop()
-                        status_running = False
-                    
-                    tool_name = event.get("name", "tool")
-                    tool_input = event.get("data", {}).get("input", {})
-                    run_id = event.get("run_id")
-                    
-                    if tool_name == "write_todos":
-                        todos = tool_input.get("todos", [])
-                        if todos:
-                            _render_todos(todos)
+                # Extract messages from the chunk
+                for node_name, node_data in chunk.items():
+                    # node_data might be a dict or other state update types (Overwrite, etc.)
+                    # Only process if it's a dict with messages
+                    if not isinstance(node_data, dict):
                         continue
                     
-                    _render_tool_start(tool_name, tool_input, run_id)
-                    continue
-                
-                # Handle tool call end events
-                if event["event"] == "on_tool_end":
-                    tool_name = event.get("name", "tool")
-                    tool_output = event.get("data", {}).get("output")
-                    run_id = event.get("run_id")
-                    
-                    if tool_name == "write_todos":
+                    messages = node_data.get("messages", [])
+                    # messages itself might be an Overwrite object or other non-list type
+                    if not isinstance(messages, (list, tuple)):
+                        continue
+                    if not messages:
                         continue
                     
-                    _render_tool_end(tool_name, tool_output, run_id)
-                    continue
-                
-                #Handle streaming token events from LLM
-                if event["event"] == "on_chat_model_stream":
-                    chunk_data = event.get("data", {})
-                    chunk = chunk_data.get("chunk")
-                    if chunk and hasattr(chunk, "content"):
-                        text = _content_to_text(chunk.content)
-                        if text:
+                    for message in messages:
+                        message_id = getattr(message, "id", None)
+                        if message_id and message_id in processed_message_ids:
+                            continue
+                        if message_id:
+                            processed_message_ids.add(message_id)
+                        
+                        # Handle AI messages (includes tool calls and text responses)
+                        if isinstance(message, AIMessage) or isinstance(message, AIMessageChunk):
+                            # Handle tool calls
+                            tool_calls = _get_tool_calls(message)
+                            if tool_calls:
+                                if status_running:
+                                    status.stop()
+                                    status_running = False
+                                
+                                for tool_call in tool_calls:
+                                    tool_name = tool_call.get("name", "tool")
+                                    tool_args = _parse_args(tool_call.get("args", {}))
+                                    call_id = tool_call.get("id")
+                                    
+                                    # Handle write_todos specially
+                                    if tool_name == "write_todos" and isinstance(tool_args, dict):
+                                        todos = tool_args.get("todos", [])
+                                        if todos:
+                                            _render_todos(todos)
+                                    else:
+                                        _render_tool_start(tool_name, tool_args, call_id)
+                            
+                            # Handle streaming text content
+                            content = _content_to_text(message.content)
+                            if content and not tool_calls:
+                                if status_running:
+                                    status.stop()
+                                    status_running = False
+                                sys.stdout.write(content)
+                                sys.stdout.flush()
+                                assistant_line_open = True
+                            
+                            # Show usage metadata if available
+                            if hasattr(message, "usage_metadata") and message.usage_metadata:
+                                _render_usage(message.usage_metadata)
+                        
+                        # Handle tool messages (tool results)
+                        elif isinstance(message, ToolMessage):
                             if status_running:
                                 status.stop()
                                 status_running = False
-                            sys.stdout.write(text)
-                            sys.stdout.flush()
-                            assistant_line_open = True
-                    continue
-                
-                # Handle LLM completion
-                if event["event"] == "on_chat_model_end":
-                    if assistant_line_open:
-                        sys.stdout.write("\n")
-                        sys.stdout.flush()
-                        assistant_line_open = False
-                    
-                    # Show usage if available
-                    output_data = event.get("data", {}).get("output", {})
-                    if hasattr(output_data, "usage_metadata") and output_data.usage_metadata:
-                        _render_usage(output_data.usage_metadata)
-                    continue
-                
-                # Handle interrupts
-                if event["event"] == "on_chain_end":
-                    chain_output = event.get("data", {}).get("output", {})
-                    if isinstance(chain_output, dict) and "__interrupt__" in chain_output:
-                        interrupt_data = chain_output["__interrupt__"]
-                        if isinstance(interrupt_data, tuple):
-                            interrupt_data = interrupt_data[0]
-                        if hasattr(interrupt_data, "value"):
-                            interrupt_data = interrupt_data.value
-                        if interrupt_data:
-                            interrupt_requests.append(interrupt_data)
+                            
+                            tool_call_id = getattr(message, "tool_call_id", None)
+                            content = _content_to_text(message.content)
+                            
+                            # Try to get the tool name from active tracking
+                            tool_name = "tool"
+                            if tool_call_id and tool_call_id in _active_tool_trees:
+                                tool_name = _active_tool_trees[tool_call_id].get("name", "tool")
+                            
+                            # Don't render write_todos results
+                            if tool_name != "write_todos":
+                                _render_tool_end(tool_name, content, tool_call_id)
+
+            if assistant_line_open:
+                sys.stdout.write("\n")
+                sys.stdout.flush()
+                assistant_line_open = False
 
         finally:
             if status_running:
@@ -433,16 +425,15 @@ async def _stream_agent_response(user_input: str, thread_id: str, session_approv
                 status.stop()
             console.print()
 
-        # Check for interrupts in the state if none were caught in the stream
-        if not interrupt_requests:
-            state = await app.aget_state(config)
-            if state.tasks:
-                for task in state.tasks:
-                    if task.interrupts:
-                        for interrupt in task.interrupts:
-                            val = interrupt.value
-                            if val:
-                                interrupt_requests.append(val)
+        # Check for interrupts in the state
+        state = await app.aget_state(config)
+        if state.tasks:
+            for task in state.tasks:
+                if task.interrupts:
+                    for interrupt in task.interrupts:
+                        val = interrupt.value
+                        if val:
+                            interrupt_requests.append(val)
 
         if interrupt_requests:
             decisions = []

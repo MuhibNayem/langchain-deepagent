@@ -17,6 +17,8 @@ from langchain_community.tools.file_management.write import WriteFileTool
 from .config.checkpointer import create_checkpointer
 from .config.env import load_project_env
 from .py_tools.registry import PY_TOOL_REGISTRY
+from .utils.llm_wrapper import ContextAwareChatModel
+from .utils.tool_wrapper import wrap_tool
 
 ROOT_DIR = Path(__file__).resolve().parent
 load_project_env()
@@ -35,20 +37,20 @@ def registry_tool(name: str):
     tool_obj = PY_TOOL_REGISTRY.get(name)
     if tool_obj is None:
         raise ValueError(f"Tool '{name}' is not registered in PY_TOOL_REGISTRY.")
-    return tool_obj
+    return wrap_tool(tool_obj)
 
 
 python_native_tools = list(PY_TOOL_REGISTRY.values())
 
 ALL_BASE_TOOLS = [
-    copy_file_tool,
-    delete_file_tool,
-    file_search_tool,
-    list_directory_tool,
-    move_file_tool,
-    read_file_tool,
-    write_file_tool,
-] + python_native_tools
+    wrap_tool(copy_file_tool),
+    wrap_tool(delete_file_tool),
+    wrap_tool(file_search_tool),
+    wrap_tool(list_directory_tool),
+    wrap_tool(move_file_tool),
+    wrap_tool(read_file_tool),
+    wrap_tool(write_file_tool),
+] + [wrap_tool(t) for t in python_native_tools]
 
 
 SYSTEM_PROMPT = """You are a deep autonomy agent that plans, researches, and edits codebases.
@@ -62,6 +64,7 @@ SYSTEM_PROMPT = """You are a deep autonomy agent that plans, researches, and edi
 - CRITICAL: 
     - Before stopping, verify that ALL items in your todo list are completed. Do not stop if there are pending tasks.
     - Always use the designated subagent to perform the task. Never do the task yourself.
+- TIP: If a file is very large, use `read_file_segment` to read relevant parts instead of loading the whole file.
 """
 
 WEB_RESEARCH_SUBAGENT_PROMPT = """You are a focused research specialist.
@@ -77,6 +80,7 @@ CODE_EXECUTOR_SUBAGENT_PROMPT = """You are a senior software engineer with commi
 - Summarize every change you make so the main agent can keep context.
 - CRITICAL: If you have a list of files to create or modify, DO NOT STOP until you have processed ALL of them.
 - CRITICAL: Do not ask for confirmation for every single file if you have a batch of work. Execute the entire batch.
+- TIP: If a file is very large, use `read_file_segment` to read relevant parts instead of loading the whole file.
 """
 
 
@@ -96,14 +100,15 @@ def build_subagents():
         "description": "Use for editing repository files, running shell commands, and applying patches.",
         "system_prompt": CODE_EXECUTOR_SUBAGENT_PROMPT,
         "tools": [
-            list_directory_tool,
+            wrap_tool(list_directory_tool),
             registry_tool("tree_view"),
-            read_file_tool,
-            write_file_tool,
-            copy_file_tool,
-            move_file_tool,
-            delete_file_tool,
-            file_search_tool,
+            wrap_tool(read_file_tool),
+            registry_tool("read_file_segment"),
+            wrap_tool(write_file_tool),
+            wrap_tool(copy_file_tool),
+            wrap_tool(move_file_tool),
+            wrap_tool(delete_file_tool),
+            wrap_tool(file_search_tool),
             registry_tool("multi_replace_in_file"),
             registry_tool("apply_patch"),
             registry_tool("grep_search"),
@@ -146,20 +151,22 @@ def get_llm():
     provider = os.environ.get("LLM_PROVIDER", "openai").lower()
     
     if provider == "ollama":
-        return ChatOllama(
+        base_llm = ChatOllama(
             model=os.environ.get("OLLAMA_MODEL", "qwen3:latest"),
             base_url=os.environ.get("OLLAMA_BASE_URL", "http://localhost:11434"),
             temperature=0.7,
             streaming=True,
         )
+    else:
+        base_llm = ChatOpenAI(
+            temperature=0.7,
+            model="glm-4.5-flash",
+            openai_api_key=os.environ.get("GLM_API_KEY"),
+            openai_api_base="https://api.z.ai/api/paas/v4/",
+            streaming=True,
+        )
     
-    return ChatOpenAI(
-        temperature=0.7,
-        model="glm-4.5-flash",
-        openai_api_key=os.environ.get("GLM_API_KEY"),
-        openai_api_base="https://api.z.ai/api/paas/v4/",
-        streaming=True,
-    )
+    return ContextAwareChatModel(base_llm)
 
 llm = get_llm()
 

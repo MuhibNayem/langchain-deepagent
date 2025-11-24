@@ -7,6 +7,7 @@ from .multi_replace import multi_replace_in_file
 from .os_info import os_info
 from .patch import apply_patch
 from .read_many import read_files_in_directory
+from .read_segment import read_file_segment
 from .shell import shell
 from .tree import tree_view
 from .weather import get_weather
@@ -21,6 +22,7 @@ PY_TOOL_REGISTRY = {
     "multi_replace_in_file": multi_replace_in_file,
     "os_info": os_info,
     "read_files_in_directory": read_files_in_directory,
+    "read_file_segment": read_file_segment,
     "shell": shell,
     "tree_view": tree_view,
     "web_search": web_search,

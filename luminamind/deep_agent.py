@@ -1,6 +1,4 @@
 import os
-import requests
-from bs4 import BeautifulSoup
 from deepagents import create_deep_agent
 from pathlib import Path
 from langchain.tools import tool

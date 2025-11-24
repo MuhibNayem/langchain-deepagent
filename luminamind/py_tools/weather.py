@@ -3,34 +3,39 @@ from __future__ import annotations
 import os
 from typing import Optional
 
-import requests
+import aiohttp
 from langchain.tools import tool
 
 API_BASE = "https://api.weatherapi.com/v1"
 
 
-def _fetch_weather(query: str) -> dict:
+async def _fetch_weather(query: str) -> dict:
     api_key = os.environ.get("WEATHER_API_KEY")
     if not api_key:
         return {"error": True, "message": "WEATHER_API_KEY is not set"}
 
     url = f"{API_BASE}/current.json"
     params = {"key": api_key, "q": query, "aqi": "no"}
+    
     try:
-        response = requests.get(url, params=params, timeout=30)
-        response.raise_for_status()
-    except requests.HTTPError:
-        try:
-            detail = response.json()
-            extra = detail.get("error", {}).get("message")
-        except Exception:  # pragma: no cover - best effort parsing
-            extra = None
-        suffix = f": {extra}" if extra else ""
-        return {"error": True, "message": f"HTTP {response.status_code}{suffix}"}
-    except requests.RequestException as exc:
+        timeout = aiohttp.ClientTimeout(total=30)
+        async with aiohttp.ClientSession(timeout=timeout) as session:
+            async with session.get(url, params=params) as response:
+                if response.status != 200:
+                    try:
+                        detail = await response.json()
+                        extra = detail.get("error", {}).get("message")
+                    except Exception:
+                        extra = None
+                    suffix = f": {extra}" if extra else ""
+                    return {"error": True, "message": f"HTTP {response.status}{suffix}"}
+                
+                data = await response.json()
+    except aiohttp.ClientError as exc:
         return {"error": True, "message": str(exc)}
+    except Exception as exc:
+        return {"error": True, "message": f"Unexpected error: {exc}"}
 
-    data = response.json()
     current = data.get("current") or {}
     if not current:
         return {"error": True, "message": "No current weather data returned"}
@@ -55,12 +60,12 @@ def _fetch_weather(query: str) -> dict:
 
 
 @tool("get_weather")
-def get_weather(city: Optional[str] = None, location: Optional[str] = None, query: Optional[str] = None) -> dict:
+async def get_weather(city: Optional[str] = None, location: Optional[str] = None, query: Optional[str] = None) -> dict:
     """Get real-time weather using WeatherAPI (requires WEATHER_API_KEY)."""
     search = city or location or query
     if not search:
         return {"error": True, "message": "Provide city, location, or query"}
-    return _fetch_weather(search)
+    return await _fetch_weather(search)
 
 
 __all__ = ["get_weather"]

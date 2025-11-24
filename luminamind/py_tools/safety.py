@@ -4,7 +4,15 @@ import os
 from pathlib import Path
 from typing import List
 
-_DEFAULT_ROOT = Path(os.environ.get("ALLOWED_ROOT", os.getcwd())).expanduser().resolve()
+# Lazy initialization to avoid blocking calls at module load time
+_DEFAULT_ROOT = None
+
+def _get_default_root() -> Path:
+    """Get the default root directory, initializing it lazily."""
+    global _DEFAULT_ROOT
+    if _DEFAULT_ROOT is None:
+        _DEFAULT_ROOT = Path(os.environ.get("ALLOWED_ROOT", Path.cwd())).expanduser().resolve()
+    return _DEFAULT_ROOT
 
 _AUTO_GENERATED_SEGMENTS = {
     "node_modules",
@@ -42,17 +50,18 @@ _AUTO_GENERATED_GLOBS = [
 
 def get_allowed_root() -> Path:
     """Return the root directory all file operations must stay inside."""
-    return _DEFAULT_ROOT
+    return _get_default_root()
 
 
 def ensure_path_allowed(target_path: os.PathLike[str] | str) -> Path:
     """Ensure the provided path is within the allowed root."""
     resolved = Path(target_path).expanduser().resolve()
+    allowed_root = _get_default_root()
     try:
-        resolved.relative_to(_DEFAULT_ROOT)
+        resolved.relative_to(allowed_root)
     except ValueError as exc:  # pragma: no cover - defensive
         raise ValueError(
-            f"Path not allowed: {resolved}. Allowed root: {_DEFAULT_ROOT}. "
+            f"Path not allowed: {resolved}. Allowed root: {allowed_root}. "
             "Set ALLOWED_ROOT to widen."
         ) from exc
     return resolved
@@ -61,8 +70,9 @@ def ensure_path_allowed(target_path: os.PathLike[str] | str) -> Path:
 def is_auto_generated_path(target_path: os.PathLike[str] | str) -> bool:
     """Return True when the path points to an auto-generated file/directory."""
     resolved = Path(target_path).expanduser().resolve()
+    allowed_root = _get_default_root()
     try:
-        rel_parts = resolved.relative_to(_DEFAULT_ROOT).parts
+        rel_parts = resolved.relative_to(allowed_root).parts
     except ValueError:
         return True
     return any(seg in _AUTO_GENERATED_SEGMENTS for seg in rel_parts) or resolved.name.endswith(".log")

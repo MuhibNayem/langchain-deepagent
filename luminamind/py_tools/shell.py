@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 import subprocess
+from pathlib import Path
 from typing import Optional
 
 from langchain.tools import tool
@@ -15,7 +16,7 @@ DEFAULT_TIMEOUT_MS = 20_000
 def shell(command: str, cwd: Optional[str] = None, timeout_ms: Optional[int] = None) -> dict:
     """Execute a shell command with optional cwd + timeout."""
     try:
-        safe_cwd = ensure_path_allowed(cwd or os.getcwd())
+        safe_cwd = ensure_path_allowed(cwd or str(Path.cwd()))
     except ValueError as exc:
         return {"error": True, "message": str(exc), "allowed_root": str(get_allowed_root())}
 

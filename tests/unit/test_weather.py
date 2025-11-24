@@ -1,20 +1,25 @@
 """Unit tests for the weather tool."""
 
 import pytest
-from unittest.mock import patch, Mock
+from unittest.mock import patch, MagicMock, AsyncMock
+from aiohttp import ClientError
 from luminamind.py_tools.weather import get_weather, _fetch_weather
+
 
 class TestWeather:
     """Test cases for the weather tool."""
 
-    @patch('luminamind.py_tools.weather.requests.get')
+    @pytest.mark.asyncio
     @patch('os.environ.get')
-    def test_get_weather_success(self, mock_env, mock_get):
+    @patch('aiohttp.ClientSession')
+    async def test_get_weather_success(self, mock_session_class, mock_env):
         """Test successful weather retrieval."""
         mock_env.return_value = "fake_api_key"
-        mock_response = Mock()
-        mock_response.status_code = 200
-        mock_response.json.return_value = {
+        
+        # Create a mock response
+        mock_response = MagicMock()
+        mock_response.status = 200
+        mock_response.json = AsyncMock(return_value={
             "location": {"name": "London", "country": "UK"},
             "current": {
                 "condition": {"text": "Sunny"},
@@ -28,63 +33,85 @@ class TestWeather:
                 "cloud": 0,
                 "last_updated": "2023-01-01 12:00"
             }
-        }
-        mock_get.return_value = mock_response
-
-        result = get_weather.invoke({"city": "London"})
+        })
+        mock_response.__aenter__ = AsyncMock(return_value=mock_response)
+        mock_response.__aexit__ = AsyncMock(return_value=False)
+        
+        # Create a mock session
+        mock_session = MagicMock()
+        mock_session.get = MagicMock(return_value=mock_response)
+        mock_session.__aenter__ = AsyncMock(return_value=mock_session)
+        mock_session.__aexit__ = AsyncMock(return_value=False)
+        
+        mock_session_class.return_value = mock_session
+        
+        result = await get_weather.ainvoke({"city": "London"})
 
         assert result["error"] is False
         assert result["location"] == "London"
         assert result["condition"] == "Sunny"
         assert result["temp_c"] == 20
 
+    @pytest.mark.asyncio
     @patch('os.environ.get')
-    def test_get_weather_no_api_key(self, mock_env):
+    async def test_get_weather_no_api_key(self, mock_env):
         """Test weather retrieval without API key."""
         mock_env.return_value = None
-        result = get_weather.invoke({"city": "London"})
+        result = await get_weather.ainvoke({"city": "London"})
         assert result["error"] is True
         assert "WEATHER_API_KEY is not set" in result["message"]
 
-    def test_get_weather_no_query(self):
+    @pytest.mark.asyncio
+    async def test_get_weather_no_query(self):
         """Test weather retrieval without query."""
-        result = get_weather.invoke({})
+        result = await get_weather.ainvoke({})
         assert result["error"] is True
         assert "Provide city, location, or query" in result["message"]
 
-    @patch('luminamind.py_tools.weather.requests.get')
+    @pytest.mark.asyncio
     @patch('os.environ.get')
-    def test_get_weather_http_error(self, mock_env, mock_get):
+    @patch('aiohttp.ClientSession')
+    async def test_get_weather_http_error(self, mock_session_class, mock_env):
         """Test weather retrieval with HTTP error."""
         mock_env.return_value = "fake_api_key"
-        mock_response = Mock()
-        mock_response.status_code = 404
-        mock_response.raise_for_status.side_effect = Exception("HTTP Error")
-        mock_response.json.return_value = {"error": {"message": "City not found"}}
-        mock_get.return_value = mock_response
         
-        # We need to simulate requests.HTTPError being raised by raise_for_status
-        # However, the code catches requests.HTTPError. 
-        # Let's mock requests.get to raise it directly if possible, or mock raise_for_status
+        # Create a mock response with error status
+        mock_response = MagicMock()
+        mock_response.status = 404
+        mock_response.json = AsyncMock(return_value={"error": {"message": "City not found"}})
+        mock_response.__aenter__ = AsyncMock(return_value=mock_response)
+        mock_response.__aexit__ = AsyncMock(return_value=False)
         
-        import requests
-        mock_response.raise_for_status.side_effect = requests.HTTPError("404 Client Error")
+        # Create a mock session
+        mock_session = MagicMock()
+        mock_session.get = MagicMock(return_value=mock_response)
+        mock_session.__aenter__ = AsyncMock(return_value=mock_session)
+        mock_session.__aexit__ = AsyncMock(return_value=False)
         
-        result = get_weather.invoke({"city": "InvalidCity"})
+        mock_session_class.return_value = mock_session
+        
+        result = await get_weather.ainvoke({"city": "InvalidCity"})
         
         assert result["error"] is True
         assert "HTTP 404" in result["message"]
         assert "City not found" in result["message"]
 
-    @patch('luminamind.py_tools.weather.requests.get')
+    @pytest.mark.asyncio
     @patch('os.environ.get')
-    def test_get_weather_request_exception(self, mock_env, mock_get):
-        """Test weather retrieval with generic request exception."""
+    @patch('aiohttp.ClientSession')
+    async def test_get_weather_client_error(self, mock_session_class, mock_env):
+        """Test weather retrieval with aiohttp ClientError."""
         mock_env.return_value = "fake_api_key"
-        import requests
-        mock_get.side_effect = requests.RequestException("Connection failed")
         
-        result = get_weather.invoke({"city": "London"})
+        # Mock session to raise ClientError
+        mock_session = MagicMock()
+        mock_session.get = MagicMock(side_effect=ClientError("Connection failed"))
+        mock_session.__aenter__ = AsyncMock(return_value=mock_session)
+        mock_session.__aexit__ = AsyncMock(return_value=False)
+        
+        mock_session_class.return_value = mock_session
+        
+        result = await get_weather.ainvoke({"city": "London"})
         
         assert result["error"] is True
         assert "Connection failed" in result["message"]

@@ -4,7 +4,7 @@ import os
 import re
 from typing import Any, Dict, List, Optional, Tuple
 
-import requests
+import aiohttp
 from langchain.tools import tool
 
 from ..config.env import load_project_env
@@ -49,7 +49,7 @@ def _normalize_results(items: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     return normalized
 
 
-def _search_google_cse(query: str, limit: Optional[int]) -> Dict[str, Any]:
+async def _search_google_cse(query: str, limit: Optional[int]) -> Dict[str, Any]:
     if not GOOGLE_API_KEY or not GOOGLE_CSE_ID:
         return {"skipped": True, "message": "GOOGLE_API_KEY/GOOGLE_CSE_ID not set"}
 
@@ -69,29 +69,32 @@ def _search_google_cse(query: str, limit: Optional[int]) -> Dict[str, Any]:
 
     url = "https://customsearch.googleapis.com/customsearch/v1"
     _debug("google_cse request", {"url": url, "params": params})
+    
     try:
-        response = requests.get(url, params=params, headers=headers, timeout=30)
-        response.raise_for_status()
-    except requests.HTTPError:
-        try:
-            detail = response.json()
-            _debug("google_cse error body", detail)
-            extra = detail.get("error", {}).get("message")
-        except Exception:
-            extra = None
-        suffix = f": {extra}" if extra else ""
-        return {"error": True, "message": f"google_cse HTTP {response.status_code}{suffix}"}
-    except requests.RequestException as exc:
+        timeout = aiohttp.ClientTimeout(total=30)
+        async with aiohttp.ClientSession(timeout=timeout) as session:
+            async with session.get(url, params=params, headers=headers) as response:
+                if response.status != 200:
+                    try:
+                        detail = await response.json()
+                        _debug("google_cse error body", detail)
+                        extra = detail.get("error", {}).get("message")
+                    except Exception:
+                        extra = None
+                    suffix = f": {extra}" if extra else ""
+                    return {"error": True, "message": f"google_cse HTTP {response.status}{suffix}"}
+                
+                payload = await response.json()
+    except aiohttp.ClientError as exc:
         return {"error": True, "message": f"google_cse {exc}"}
 
-    payload = response.json()
     items = payload.get("items") or []
     _debug("google_cse response count", len(items) if isinstance(items, list) else 0)
     results = _normalize_results(items)
     return {"error": False, "engine": "google_cse", "results": _prune_results(results, limit)}
 
 
-def _search_serper(query: str, limit: Optional[int]) -> Dict[str, Any]:
+async def _search_serper(query: str, limit: Optional[int]) -> Dict[str, Any]:
     if not SERPER_API_KEY:
         return {"skipped": True, "message": "SERPER_API_KEY not set"}
 
@@ -103,31 +106,32 @@ def _search_serper(query: str, limit: Optional[int]) -> Dict[str, Any]:
     }
 
     try:
-        response = requests.post(
-            "https://google.serper.dev/search",
-            json=body,
-            headers=headers,
-            timeout=30,
-        )
-        response.raise_for_status()
-    except requests.HTTPError:
-        try:
-            detail = response.json()
-            _debug("serper error body", detail)
-        except Exception:
-            pass
-        return {"error": True, "message": f"serper HTTP {response.status_code}"}
-    except requests.RequestException as exc:
+        timeout = aiohttp.ClientTimeout(total=30)
+        async with aiohttp.ClientSession(timeout=timeout) as session:
+            async with session.post(
+                "https://google.serper.dev/search",
+                json=body,
+                headers=headers,
+            ) as response:
+                if response.status != 200:
+                    try:
+                        detail = await response.json()
+                        _debug("serper error body", detail)
+                    except Exception:
+                        pass
+                    return {"error": True, "message": f"serper HTTP {response.status}"}
+                
+                payload = await response.json()
+    except aiohttp.ClientError as exc:
         return {"error": True, "message": f"serper {exc}"}
 
-    payload = response.json()
     organic = payload.get("organic") or []
     _debug("serper organic count", len(organic) if isinstance(organic, list) else 0)
     results = _normalize_results(organic)
     return {"error": False, "engine": "serper", "results": _prune_results(results, limit)}
 
 
-def _search_ollama(query: str, limit: Optional[int]) -> Dict[str, Any]:
+async def _search_ollama(query: str, limit: Optional[int]) -> Dict[str, Any]:
     base_url = OLLAMA_HOST or "http://127.0.0.1:11434"
     if not re.match(r"^https?://", base_url):
         base_url = f"http://{base_url}"
@@ -135,14 +139,18 @@ def _search_ollama(query: str, limit: Optional[int]) -> Dict[str, Any]:
     payload = {"query": query, "max_results": limit or DEFAULT_LIMIT}
 
     try:
-        response = requests.post(url, json=payload, timeout=60)
-        if response.status_code == 404:
-            return {"error": True, "message": "ollama search endpoint not available"}
-        response.raise_for_status()
-    except requests.RequestException as exc:
+        timeout = aiohttp.ClientTimeout(total=60)
+        async with aiohttp.ClientSession(timeout=timeout) as session:
+            async with session.post(url, json=payload) as response:
+                if response.status == 404:
+                    return {"error": True, "message": "ollama search endpoint not available"}
+                if response.status != 200:
+                    return {"error": True, "message": f"ollama_search HTTP {response.status}"}
+                
+                data = await response.json()
+    except aiohttp.ClientError as exc:
         return {"error": True, "message": f"ollama_search {exc}"}
 
-    data = response.json()
     items = data.get("results") or data.get("data") or []
     if not isinstance(items, list):
         return {"error": True, "message": "ollama_search returned unexpected payload"}
@@ -154,7 +162,7 @@ def _search_ollama(query: str, limit: Optional[int]) -> Dict[str, Any]:
     return {"error": False, "engine": "ollama_search", "results": _prune_results(results, limit)}
 
 
-def _run_fallback_search(query: str, limit: Optional[int]) -> Dict[str, Any]:
+async def _run_fallback_search(query: str, limit: Optional[int]) -> Dict[str, Any]:
     attempts: List[str] = []
     providers: List[Tuple[str, Any]] = [
         ("google_cse", _search_google_cse),
@@ -164,7 +172,7 @@ def _run_fallback_search(query: str, limit: Optional[int]) -> Dict[str, Any]:
 
     for name, fn in providers:
         try:
-            result = fn(query, limit)
+            result = await fn(query, limit)
         except Exception as exc:  # pragma: no cover - defensive log
             attempts.append(f"{name}: {exc}")
             continue
@@ -188,10 +196,10 @@ def _run_fallback_search(query: str, limit: Optional[int]) -> Dict[str, Any]:
 
 
 @tool("web_search")
-def web_search(query: str, limit: Optional[int] = None) -> dict:
+async def web_search(query: str, limit: Optional[int] = None) -> dict:
     """Search the web (Google Custom Search -> Serper -> Ollama)."""
     capped_limit = min(limit or DEFAULT_LIMIT, 10)
-    result = _run_fallback_search(query, capped_limit)
+    result = await _run_fallback_search(query, capped_limit)
     if result.get("error"):
         return result
     return {

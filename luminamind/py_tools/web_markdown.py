@@ -1,12 +1,12 @@
 from __future__ import annotations
 
-import requests
+import aiohttp
 from bs4 import BeautifulSoup
 from langchain.tools import tool
 
 
 @tool("fetch_as_markdown")
-def fetch_as_markdown(url: str) -> str:
+async def fetch_as_markdown(url: str) -> str:
     """
     Fetch a URL and convert its content to Markdown.
     
@@ -14,10 +14,15 @@ def fetch_as_markdown(url: str) -> str:
         url: The URL to fetch.
     """
     try:
-        response = requests.get(url, timeout=30)
-        response.raise_for_status()
+        timeout = aiohttp.ClientTimeout(total=30)
+        async with aiohttp.ClientSession(timeout=timeout) as session:
+            async with session.get(url) as response:
+                if response.status != 200:
+                    return f"Error fetching {url}: HTTP {response.status}"
+                
+                html_content = await response.text()
         
-        soup = BeautifulSoup(response.text, "html.parser")
+        soup = BeautifulSoup(html_content, "html.parser")
         
         # Simple conversion strategy
         # 1. Convert headers

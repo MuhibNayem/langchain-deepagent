@@ -180,22 +180,30 @@ _active_tool_trees = {}
 
 @contextmanager
 def _langgraph_config_file() -> Iterable[Path]:
-    """Locate langgraph.json from the installed package or repo root."""
+    """Locate langgraph.json from CWD or package."""
+    # 1. Check CWD (user override)
+    cwd_config = Path.cwd() / "langgraph.json"
+    if cwd_config.exists():
+        yield cwd_config
+        return
+
+    # 2. Check package resources
     try:
         pkg_resource = resources.files("luminamind").joinpath("langgraph.json")
         with resources.as_file(pkg_resource) as pkg_path:
             if pkg_path.exists():
                 yield pkg_path
                 return
-    except (FileNotFoundError, ModuleNotFoundError):
+    except (FileNotFoundError, ModuleNotFoundError, ImportError):
         pass
 
-    fallback = Path(__file__).resolve().parents[1] / "langgraph.json"
-    if fallback.exists():
-        yield fallback
+    # 3. Fallback to local file (for source execution)
+    local_config = Path(__file__).parent / "langgraph.json"
+    if local_config.exists():
+        yield local_config
         return
 
-    raise FileNotFoundError(f"langgraph.json not found in package resources or at {fallback}")
+    raise FileNotFoundError(f"langgraph.json not found in CWD, package resources, or at {local_config}")
 
 
 def _render_todos(todos: list[dict]) -> None:
@@ -510,6 +518,56 @@ def main(ctx: typer.Context):
             except FileNotFoundError as exc:
                 console.print(f"[red]{exc}[/red]")
                 raise typer.Exit(code=1)
+
+
+@cli.command()
+def config() -> None:
+    """
+    Configure global environment variables.
+    """
+    from .config.env import get_global_config_path
+    
+    config_path = get_global_config_path()
+    console.print(Panel(f"Global configuration file: [bold]{config_path}[/bold]", title="Configuration", border_style="cyan"))
+    
+    # Load existing
+    current_vars = {}
+    if config_path.exists():
+        with open(config_path) as f:
+            for line in f:
+                if "=" in line:
+                    k, v = line.strip().split("=", 1)
+                    current_vars[k] = v
+    
+    if current_vars:
+        console.print("\n[bold]Current Global Variables:[/bold]")
+        for k, v in current_vars.items():
+            masked = v[:4] + "*" * (len(v) - 4) if len(v) > 8 else "*" * len(v)
+            console.print(f"  {k} = {masked}")
+    
+    if not questionary.confirm("Do you want to add/update environment variables?").ask():
+        return
+
+    new_vars = current_vars.copy()
+    
+    while True:
+        key = questionary.text("Enter variable name (e.g. OPENAI_API_KEY) [Leave empty to finish]:").ask()
+        if not key:
+            break
+        
+        key = key.upper().strip()
+        val = questionary.password(f"Enter value for {key}:").ask()
+        
+        if val:
+            new_vars[key] = val
+            console.print(f"[green]Set {key}[/green]")
+    
+    # Save
+    with open(config_path, "w") as f:
+        for k, v in new_vars.items():
+            f.write(f"{k}={v}\n")
+            
+    console.print(f"\n[green]Configuration saved to {config_path}[/green]")
 
 
 @cli.command()

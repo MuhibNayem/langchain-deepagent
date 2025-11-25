@@ -35,7 +35,6 @@ from prompt_toolkit.key_binding import KeyBindings
 from deepagents import create_deep_agent
 from .config.checkpointer import create_checkpointer
 from .config.env import load_project_env, ensure_global_env, configure_global_env
-from .deep_agent import app as default_app, agent_kwargs
 
 console = Console()
 cli = typer.Typer(help="Interactive Deep Agent CLI", invoke_without_command=True)
@@ -535,6 +534,10 @@ def chat(thread: Optional[str] = typer.Option(None, help="Existing thread ID to 
     """
     ensure_global_env()
     load_project_env()
+    
+    # Lazy import to avoid early initialization before config is loaded
+    from .deep_agent import app as default_app, agent_kwargs
+    
     current_thread = thread or str(uuid7())
     typer.echo("Deep Agent CLI")
     typer.echo("Type your question. Press Meta+Enter (or Esc then Enter) to submit. Commands: /exit, /reset")

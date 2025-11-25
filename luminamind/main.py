@@ -34,7 +34,7 @@ from prompt_toolkit.key_binding import KeyBindings
 
 from deepagents import create_deep_agent
 from .config.checkpointer import create_checkpointer
-from .config.env import load_project_env
+from .config.env import load_project_env, ensure_global_env, configure_global_env
 from .deep_agent import app as default_app, agent_kwargs
 
 console = Console()
@@ -525,49 +525,7 @@ def config() -> None:
     """
     Configure global environment variables.
     """
-    from .config.env import get_global_config_path
-    
-    config_path = get_global_config_path()
-    console.print(Panel(f"Global configuration file: [bold]{config_path}[/bold]", title="Configuration", border_style="cyan"))
-    
-    # Load existing
-    current_vars = {}
-    if config_path.exists():
-        with open(config_path) as f:
-            for line in f:
-                if "=" in line:
-                    k, v = line.strip().split("=", 1)
-                    current_vars[k] = v
-    
-    if current_vars:
-        console.print("\n[bold]Current Global Variables:[/bold]")
-        for k, v in current_vars.items():
-            masked = v[:4] + "*" * (len(v) - 4) if len(v) > 8 else "*" * len(v)
-            console.print(f"  {k} = {masked}")
-    
-    if not questionary.confirm("Do you want to add/update environment variables?").ask():
-        return
-
-    new_vars = current_vars.copy()
-    
-    while True:
-        key = questionary.text("Enter variable name (e.g. OPENAI_API_KEY) [Leave empty to finish]:").ask()
-        if not key:
-            break
-        
-        key = key.upper().strip()
-        val = questionary.password(f"Enter value for {key}:").ask()
-        
-        if val:
-            new_vars[key] = val
-            console.print(f"[green]Set {key}[/green]")
-    
-    # Save
-    with open(config_path, "w") as f:
-        for k, v in new_vars.items():
-            f.write(f"{k}={v}\n")
-            
-    console.print(f"\n[green]Configuration saved to {config_path}[/green]")
+    configure_global_env(force=True)
 
 
 @cli.command()
@@ -575,6 +533,7 @@ def chat(thread: Optional[str] = typer.Option(None, help="Existing thread ID to 
     """
     Start a conversational CLI with the deep agent.
     """
+    ensure_global_env()
     load_project_env()
     current_thread = thread or str(uuid7())
     typer.echo("Deep Agent CLI")
@@ -629,6 +588,9 @@ def chat(thread: Optional[str] = typer.Option(None, help="Existing thread ID to 
             current_thread = str(uuid7())
             session_approved_tools.clear()
             typer.echo("🔄 Started a new conversation.")
+            continue
+        if lowered == "/config":
+            configure_global_env(force=True)
             continue
 
         console.print("[bold magenta]Agent>[/] ", end="")

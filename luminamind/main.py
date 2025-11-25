@@ -187,14 +187,18 @@ def _langgraph_config_file() -> Iterable[Path]:
         return
 
     # 2. Check package resources
+    ctx = None
     try:
         pkg_resource = resources.files("luminamind").joinpath("langgraph.json")
-        with resources.as_file(pkg_resource) as pkg_path:
+        ctx = resources.as_file(pkg_resource)
+    except (FileNotFoundError, ModuleNotFoundError, ImportError):
+        pass
+
+    if ctx:
+        with ctx as pkg_path:
             if pkg_path.exists():
                 yield pkg_path
                 return
-    except (FileNotFoundError, ModuleNotFoundError, ImportError):
-        pass
 
     # 3. Fallback to local file (for source execution)
     local_config = Path(__file__).parent / "langgraph.json"
@@ -482,6 +486,18 @@ async def _stream_agent_response(user_input: str, thread_id: str, session_approv
     if assistant_line_open:
         console.print()
 
+def _find_langgraph_executable() -> str:
+    """Find the langgraph executable."""
+    # 1. Check in the same directory as the python interpreter (venv bin)
+    venv_bin = Path(sys.executable).parent
+    langgraph_path = venv_bin / "langgraph"
+    if langgraph_path.exists():
+        return str(langgraph_path)
+    
+    # 2. Fallback to PATH
+    return "langgraph"
+
+
 @cli.callback(invoke_without_command=True)
 def main(ctx: typer.Context):
     """
@@ -511,11 +527,13 @@ def main(ctx: typer.Context):
             chat(None)
         elif choice == "LangGraph Dev":
             console.print("[green]Starting LangGraph Dev Server...[/green]")
+            langgraph_cmd = _find_langgraph_executable()
             try:
                 with _langgraph_config_file() as config_path:
-                    subprocess.run(["langgraph", "dev", "--config", str(config_path)])
+                    subprocess.run([langgraph_cmd, "dev", "--config", str(config_path)])
             except FileNotFoundError as exc:
-                console.print(f"[red]{exc}[/red]")
+                console.print(f"[red]Error: {exc}[/red]")
+                console.print(f"[dim]Could not find '{langgraph_cmd}'. Ensure langgraph-cli is installed.[/dim]")
                 raise typer.Exit(code=1)
 
 

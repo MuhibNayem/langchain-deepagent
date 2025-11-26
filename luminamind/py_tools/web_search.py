@@ -4,11 +4,14 @@ import os
 import re
 from typing import Any, Dict, List, Optional, Tuple
 import ollama
-
 import requests
+
 from langchain.tools import tool
 
 from ..config.env import load_project_env
+from ..observability.metrics import monitor_tool
+from ..utils.http_client import DEFAULT_TIMEOUT_SECONDS, get_secure_session
+from ..utils.rate_limit import RateLimitError, enforce_rate_limit
 
 load_project_env()
 
@@ -25,6 +28,7 @@ GOOGLE_CSE_ID = (
 GOOGLE_REFERER = os.environ.get("GOOGLE_REFERER") or os.environ.get("GOOGLE_REFERRER")
 OLLAMA_HOST = os.environ.get("OLLAMA_HOST")
 DEBUG = os.environ.get("DEBUG_WEB_SEARCH") == "1"
+_SESSION = get_secure_session()
 
 
 def _debug(message: str, payload: Optional[Any] = None) -> None:
@@ -72,7 +76,7 @@ def _search_google_cse(query: str, limit: Optional[int]) -> Dict[str, Any]:
     url = "https://customsearch.googleapis.com/customsearch/v1"
     _debug("google_cse request", {"url": url, "params": params})
     try:
-        response = requests.get(url, params=params, headers=headers, timeout=30)
+        response = _SESSION.get(url, params=params, headers=headers, timeout=DEFAULT_TIMEOUT_SECONDS)
         response.raise_for_status()
     except requests.HTTPError:
         try:
@@ -105,11 +109,11 @@ def _search_serper(query: str, limit: Optional[int]) -> Dict[str, Any]:
     }
 
     try:
-        response = requests.post(
+        response = _SESSION.post(
             "https://google.serper.dev/search",
             json=body,
             headers=headers,
-            timeout=30,
+            timeout=DEFAULT_TIMEOUT_SECONDS,
         )
         response.raise_for_status()
     except requests.HTTPError:
@@ -179,8 +183,14 @@ def _run_fallback_search(query: str, limit: Optional[int]) -> Dict[str, Any]:
 
 
 @tool("web_search")
-def web_search(query: str, limit: Optional[int] = None) -> dict:
+@monitor_tool
+def web_search(query: str, limit: Optional[int] = None, identity: Optional[str] = None) -> dict:
     """Search the web (Google Custom Search -> Serper -> Ollama)."""
+    try:
+        enforce_rate_limit("web_search", identity=identity)
+    except RateLimitError as exc:
+        return {"error": True, "message": str(exc)}
+
     capped_limit = min(limit or DEFAULT_LIMIT, 10)
     result = _run_fallback_search(query, capped_limit)
     if result.get("error"):

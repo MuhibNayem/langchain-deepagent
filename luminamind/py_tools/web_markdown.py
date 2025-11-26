@@ -4,8 +4,14 @@ import requests
 from bs4 import BeautifulSoup
 from langchain.tools import tool
 
+from ..observability.metrics import monitor_tool
+from ..utils.http_client import DEFAULT_TIMEOUT_SECONDS, get_secure_session
+
+_SESSION = get_secure_session()
+
 
 @tool("fetch_as_markdown")
+@monitor_tool
 def fetch_as_markdown(url: str) -> str:
     """
     Fetch a URL and convert its content to Markdown.
@@ -14,7 +20,7 @@ def fetch_as_markdown(url: str) -> str:
         url: The URL to fetch.
     """
     try:
-        response = requests.get(url, timeout=30)
+        response = _SESSION.get(url, timeout=DEFAULT_TIMEOUT_SECONDS)
         response.raise_for_status()
         
         soup = BeautifulSoup(response.text, "html.parser")

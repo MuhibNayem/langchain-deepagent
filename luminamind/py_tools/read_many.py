@@ -2,13 +2,18 @@ import os
 from pathlib import Path
 from langchain.tools import tool
 
+from .safety import ensure_path_allowed
+from ..observability.metrics import monitor_tool
+
+
 @tool
+@monitor_tool
 def read_files_in_directory(
     directory_path: str,
     extensions: list[str] | None = None,
     recursive: bool = False,
     max_files: int = 10,
-    max_size_per_file: int = 10000
+    max_size_per_file: int = 10000,
 ) -> str:
     """
     Reads the content of multiple files in a directory.
@@ -24,7 +29,7 @@ def read_files_in_directory(
         A formatted string containing the content of the read files.
     """
     try:
-        root_path = Path(directory_path).resolve()
+        root_path = ensure_path_allowed(Path(directory_path).resolve())
         if not root_path.exists() or not root_path.is_dir():
             return f"Error: Directory '{directory_path}' does not exist or is not a directory."
 

@@ -10,6 +10,7 @@ from typing import Optional
 
 from langchain.tools import tool
 
+from ..observability.metrics import monitor_tool
 
 def _total_memory_bytes() -> Optional[int]:
     """Best-effort total system memory."""
@@ -69,6 +70,7 @@ def _uptime_seconds() -> Optional[int]:
 
 
 @tool("os_info")
+@monitor_tool
 def os_info() -> dict:
     """Get host OS information (platform, architecture, CPUs, memory, uptime)."""
     return {

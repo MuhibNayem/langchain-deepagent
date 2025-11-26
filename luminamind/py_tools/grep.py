@@ -8,9 +8,11 @@ from typing import List, Optional
 from langchain.tools import tool
 
 from .safety import ensure_path_allowed
+from ..observability.metrics import monitor_tool
 
 
 @tool("grep_search")
+@monitor_tool
 def grep_search(
     query: str,
     directory: str = ".",
@@ -29,7 +31,7 @@ def grep_search(
         max_results: Maximum number of matches to return.
     """
     try:
-        root_path = Path(directory).resolve()
+        root_path = ensure_path_allowed(Path(directory).resolve())
         if not root_path.exists() or not root_path.is_dir():
             return f"Error: Directory '{directory}' does not exist."
 

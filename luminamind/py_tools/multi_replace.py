@@ -7,6 +7,7 @@ from typing import Optional, List, Dict
 from langchain.tools import tool
 
 from .safety import ensure_path_allowed
+from ..observability.metrics import monitor_tool
 
 
 def _parse_flags(flag_str: Optional[str]) -> int:
@@ -24,6 +25,7 @@ def _parse_flags(flag_str: Optional[str]) -> int:
 
 
 @tool("multi_replace_in_file")
+@monitor_tool
 def multi_replace_in_file(
     path: str,
     replacements: List[Dict[str, str]],

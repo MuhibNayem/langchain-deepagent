@@ -7,9 +7,11 @@ from typing import List, Optional
 from langchain.tools import tool
 
 from .safety import ensure_path_allowed
+from ..observability.metrics import monitor_tool
 
 
 @tool("tree_view")
+@monitor_tool
 def tree_view(
     path: str = ".",
     max_depth: int = 2,
@@ -26,12 +28,10 @@ def tree_view(
         show_hidden: Whether to show hidden files/directories (starting with .).
     """
     try:
-        root_path = Path(path).resolve()
+        root_path = ensure_path_allowed(Path(path).resolve())
         if not root_path.exists() or not root_path.is_dir():
             return f"Error: Directory '{path}' does not exist."
-        
-        ensure_path_allowed(str(root_path))
-        
+
         exclude_set = set(exclude) if exclude else set()
         
         lines = []

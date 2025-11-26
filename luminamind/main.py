@@ -1,5 +1,6 @@
 import asyncio
 import json
+import os
 import sys
 import time
 import subprocess
@@ -35,9 +36,12 @@ from prompt_toolkit.key_binding import KeyBindings
 from deepagents import create_deep_agent
 from .config.checkpointer import create_checkpointer
 from .config.env import load_project_env, ensure_global_env, configure_global_env
+from .observability.logging import setup_logging
+from .observability.metrics import start_metrics_server
 
 console = Console()
 cli = typer.Typer(help="Interactive Deep Agent CLI", invoke_without_command=True)
+_observability_initialized = False
 
 STATUS_PHRASES = [
     "Coding is 90% debugging, 10% writing bugs.",
@@ -46,6 +50,18 @@ STATUS_PHRASES = [
     "Refactoring reality one function at a time.",
     "Untangling dependency spaghetti...",
 ]
+
+
+def _initialize_observability() -> None:
+    """Configure logging and metrics once per process."""
+    global _observability_initialized
+    if _observability_initialized:
+        return
+
+    log_format_json = os.getenv("LOG_FORMAT", "json").lower() == "json"
+    setup_logging(level=os.getenv("LOG_LEVEL", "INFO"), json_format=log_format_json)
+    start_metrics_server()
+    _observability_initialized = True
 
 
 def _content_to_text(content: Any) -> str:
@@ -552,6 +568,7 @@ def chat(thread: Optional[str] = typer.Option(None, help="Existing thread ID to 
     """
     ensure_global_env()
     load_project_env()
+    _initialize_observability()
     
     # Lazy import to avoid early initialization before config is loaded
     from .deep_agent import app as default_app, agent_kwargs

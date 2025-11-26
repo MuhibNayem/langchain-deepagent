@@ -3,10 +3,16 @@ from __future__ import annotations
 import os
 from typing import Optional
 
-import requests
 from langchain.tools import tool
 
+import requests
+
+from ..observability.metrics import monitor_tool
+from ..utils.http_client import DEFAULT_TIMEOUT_SECONDS, get_secure_session
+from ..utils.rate_limit import RateLimitError, enforce_rate_limit
+
 API_BASE = "https://api.weatherapi.com/v1"
+_SESSION = get_secure_session()
 
 
 def _fetch_weather(query: str) -> dict:
@@ -17,7 +23,7 @@ def _fetch_weather(query: str) -> dict:
     url = f"{API_BASE}/current.json"
     params = {"key": api_key, "q": query, "aqi": "no"}
     try:
-        response = requests.get(url, params=params, timeout=30)
+        response = _SESSION.get(url, params=params, timeout=DEFAULT_TIMEOUT_SECONDS)
         response.raise_for_status()
     except requests.HTTPError:
         try:
@@ -55,11 +61,21 @@ def _fetch_weather(query: str) -> dict:
 
 
 @tool("get_weather")
-def get_weather(city: Optional[str] = None, location: Optional[str] = None, query: Optional[str] = None) -> dict:
+@monitor_tool
+def get_weather(
+    city: Optional[str] = None,
+    location: Optional[str] = None,
+    query: Optional[str] = None,
+    identity: Optional[str] = None,
+) -> dict:
     """Get real-time weather using WeatherAPI (requires WEATHER_API_KEY)."""
     search = city or location or query
     if not search:
         return {"error": True, "message": "Provide city, location, or query"}
+    try:
+        enforce_rate_limit("get_weather", identity=identity)
+    except RateLimitError as exc:
+        return {"error": True, "message": str(exc)}
     return _fetch_weather(search)
 
 

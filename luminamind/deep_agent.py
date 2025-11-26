@@ -146,11 +146,15 @@ def get_llm():
             streaming=True,
         )
     
+    api_key = os.environ.get("GLM_API_KEY")
+    api_base = os.environ.get("GLM_API_BASE", "https://api.z.ai/api/paas/v4/")
+
+    # TODO: migrate to secrets manager (Vault/K8s secrets) for production deployments.
     return ChatOpenAI(
         temperature=0.7,
         model="glm-4.5-flash",
-        openai_api_key=os.environ.get("GLM_API_KEY"),
-        openai_api_base="https://api.z.ai/api/paas/v4/",
+        openai_api_key=api_key,
+        openai_api_base=api_base,
         streaming=True,
     )
 

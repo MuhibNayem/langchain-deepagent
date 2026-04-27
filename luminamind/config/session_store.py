@@ -293,8 +293,59 @@ class Session:
 class InMemorySessionStore:
     """In-memory session store (fallback when no Redis or File configured)."""
 
-    def __init__(self) -> None:
+    def __init__(self, compactor: Any = None) -> None:
         self._sessions: dict[str, Session] = {}
+        self.compactor = compactor
+
+    def auto_compact(self, thread_id: str) -> None:
+        """Run compaction on each agent turn (per D-04).
+
+        Args:
+            thread_id: Session thread identifier
+        """
+        if self.compactor is None:
+            return
+        session = self.get_session(thread_id)
+        messages = []
+        count = session.transcript.get_message_count()
+        for i in range(count):
+            msg = session.transcript.get_message_at(i)
+            if msg is not None:
+                messages.append(msg)
+        if not messages:
+            return
+
+        prefix = ""
+        result = self.compactor.compact(messages, prefix)
+        if result.compression_ratio < 1.0:
+            session.working_memory.add_note(
+                f"Compacted {result.original_count} → {result.compressed_count} messages "
+                f"({result.compression_ratio:.0%} ratio, {result.token_budget_used} tokens)"
+            )
+
+    def compact_now(self, thread_id: str) -> Any:
+        """Manual trigger for compaction.
+
+        Args:
+            thread_id: Session thread identifier
+
+        Returns:
+            CompressionResult or None if no compactor
+        """
+        if self.compactor is None:
+            return None
+        session = self.get_session(thread_id)
+        messages = []
+        count = session.transcript.get_message_count()
+        for i in range(count):
+            msg = session.transcript.get_message_at(i)
+            if msg is not None:
+                messages.append(msg)
+        if not messages:
+            return None
+
+        prefix = ""
+        return self.compactor.compact(messages, prefix)
 
     def get_session(self, thread_id: str) -> Session:
         """Get or create session for thread_id.
@@ -350,12 +401,13 @@ class InMemorySessionStore:
 class FileBackedSessionStore:
     """File-backed session store using CHECKPOINT_DIR."""
 
-    def __init__(self, directory: str | Path) -> None:
+    def __init__(self, directory: str | Path, compactor: Any = None) -> None:
         self.dir = Path(directory)
         self.session_dir = self.dir / "sessions"
         self.session_dir.mkdir(parents=True, exist_ok=True)
         self.state_file = self.dir / "session_state.pkl"
         self._sessions: dict[str, Session] = {}
+        self.compactor = compactor
         self._load()
 
     def _load(self) -> None:
@@ -375,6 +427,56 @@ class FileBackedSessionStore:
             self.state_file.write_bytes(pickle.dumps(self._sessions))
         except Exception:
             pass
+
+    def auto_compact(self, thread_id: str) -> None:
+        """Run compaction on each agent turn (per D-04).
+
+        Args:
+            thread_id: Session thread identifier
+        """
+        if self.compactor is None:
+            return
+        session = self.get_session(thread_id)
+        messages = []
+        count = session.transcript.get_message_count()
+        for i in range(count):
+            msg = session.transcript.get_message_at(i)
+            if msg is not None:
+                messages.append(msg)
+        if not messages:
+            return
+
+        prefix = ""
+        result = self.compactor.compact(messages, prefix)
+        if result.compression_ratio < 1.0:
+            session.working_memory.add_note(
+                f"Compacted {result.original_count} → {result.compressed_count} messages "
+                f"({result.compression_ratio:.0%} ratio, {result.token_budget_used} tokens)"
+            )
+
+    def compact_now(self, thread_id: str) -> Any:
+        """Manual trigger for compaction.
+
+        Args:
+            thread_id: Session thread identifier
+
+        Returns:
+            CompressionResult or None if no compactor
+        """
+        if self.compactor is None:
+            return None
+        session = self.get_session(thread_id)
+        messages = []
+        count = session.transcript.get_message_count()
+        for i in range(count):
+            msg = session.transcript.get_message_at(i)
+            if msg is not None:
+                messages.append(msg)
+        if not messages:
+            return None
+
+        prefix = ""
+        return self.compactor.compact(messages, prefix)
 
     def get_session(self, thread_id: str) -> Session:
         """Get or create session for thread_id.

@@ -172,14 +172,14 @@
 7. Alert system notifies on task failure, convergence issues, resource exhaustion
 
 **Plans:**
-- [ ] 08-01: Task Queue & Persistence — `.planning/phases/08-agent-swarm-automation/08-01-PLAN.md`
-- [ ] 08-02: Scheduler & Cron — `.planning/phases/08-agent-swarm-automation/08-02-PLAN.md`
-- [ ] 08-03: Agent Swarm Orchestration — `.planning/phases/08-agent-swarm-automation/08-03-PLAN.md`
-- [ ] 08-04: Background Workers — `.planning/phases/08-agent-swarm-automation/08-04-PLAN.md`
-- [ ] 08-05: Monitoring & Alerting — `.planning/phases/08-agent-swarm-automation/08-05-PLAN.md`
-- [ ] 08-06: API & CLI — `.planning/phases/08-agent-swarm-automation/08-06-PLAN.md`
-- [ ] 08-07: Enterprise Features — `.planning/phases/08-agent-swarm-automation/08-07-PLAN.md`
-- [ ] 08-08: Installation & Distribution — `.planning/phases/08-agent-swarm-automation/08-08-PLAN.md`
+- [x] 08-01: Task Queue & Persistence — `.planning/phases/08-agent-swarm-automation/08-01-PLAN.md`
+- [x] 08-02: Scheduler & Cron — `.planning/phases/08-agent-swarm-automation/08-02-PLAN.md`
+- [x] 08-03: Agent Swarm Orchestration — `.planning/phases/08-agent-swarm-automation/08-03-PLAN.md`
+- [x] 08-04: Background Workers — `.planning/phases/08-agent-swarm-automation/08-04-PLAN.md`
+- [x] 08-05: Monitoring & Alerting — `.planning/phases/08-agent-swarm-automation/08-05-PLAN.md`
+- [x] 08-06: API & CLI — `.planning/phases/08-agent-swarm-automation/08-06-PLAN.md`
+- [x] 08-07: Enterprise Features — `.planning/phases/08-agent-swarm-automation/08-07-PLAN.md`
+- [x] 08-08: Installation & Distribution — `.planning/phases/08-agent-swarm-automation/08-08-PLAN.md`
 
 ---
 
@@ -188,13 +188,13 @@
 **Goal:** Persistent task queue with retry logic, priority handling, and dead-letter queue
 
 **Subtasks:**
-- [ ] 08-01-01: Task queue architecture (FIFO, priority, delayed execution)
-- [ ] 08-01-02: Task persistence to Redis (serialization, deserialization)
-- [ ] 08-01-03: Retry logic with exponential backoff (max_attempts, backoff_multiplier)
-- [ ] 08-01-04: Dead-letter queue for failed tasks after max retries
-- [ ] 08-01-05: Task cancellation (user-initiated abort)
-- [ ] 08-01-06: Task priority escalation (tasks promoted after waiting threshold)
-- [ ] 08-01-07: Task deduplication (idempotency key per task type)
+- [x] 08-01-01: Task queue architecture (FIFO, priority, delayed execution)
+- [x] 08-01-02: Task persistence to Redis (serialization, deserialization)
+- [x] 08-01-03: Retry logic with exponential backoff (max_attempts, backoff_multiplier)
+- [x] 08-01-04: Dead-letter queue for failed tasks after max retries
+- [x] 08-01-05: Task cancellation (user-initiated abort)
+- [x] 08-01-06: Task priority escalation (tasks promoted after waiting threshold)
+- [x] 08-01-07: Task deduplication (idempotency key per task type)
 - [ ] 08-01-08: Task rate limiting (max concurrent tasks per namespace)
 
 **Files:**
@@ -246,12 +246,12 @@ class TaskQueue:
 **Goal:** Time-based task scheduling with cron expressions, one-shot tasks, and recurring task management
 
 **Subtasks:**
-- [ ] 08-02-01: Cron expression parser (standard cron format: minute, hour, day, month, weekday)
-- [ ] 08-02-02: One-shot scheduled tasks (run once at specific datetime)
-- [ ] 08-02-03: Recurring task registration (daily, weekly, monthly, custom cron)
-- [ ] 08-02-04: Scheduler engine (tick loop, next-fire calculation)
-- [ ] 08-02-05: Timezone support (UTC, local, named timezones)
-- [ ] 08-02-06: Missed task handling (run_missed, skip_missed, run_once)
+- [x] 08-02-01: Cron expression parser (standard cron format: minute, hour, day, month, weekday)
+- [x] 08-02-02: One-shot scheduled tasks (run once at specific datetime)
+- [x] 08-02-03: Recurring task registration (daily, weekly, monthly, custom cron)
+- [x] 08-02-04: Scheduler engine (tick loop, next-fire calculation)
+- [x] 08-02-05: Timezone support (UTC, local, named timezones)
+- [x] 08-02-06: Missed task handling (run_missed, skip_missed, run_once)
 - [ ] 08-02-07: Task persistence across restarts (scheduler state serialization)
 - [ ] 08-02-08: Calendar-based scheduling (exclude holidays, business days only)
 
@@ -303,11 +303,11 @@ class Scheduler:
 **Goal:** Coordinate multiple agents as a swarm with shared context, role specialization, and emergent coordination
 
 **Subtasks:**
-- [ ] 08-03-01: Swarm architecture (Swarm, AgentRole, SwarmConfig)
-- [ ] 08-03-02: Role-based agent specialization (planner_role, generator_role, reviewer_role)
-- [ ] 08-03-03: Shared knowledge base (vector store, graph store for agent memory)
-- [ ] 08-03-04: Agent heartbeat and health monitoring
-- [ ] 08-03-05: Swarm consensus mechanism (voting, priority-based conflict resolution)
+- [x] 08-03-01: Swarm architecture (Swarm, AgentRole, SwarmConfig)
+- [x] 08-03-02: Role-based agent specialization (planner_role, generator_role, reviewer_role)
+- [x] 08-03-03: Shared knowledge base (vector store, graph store for agent memory)
+- [x] 08-03-04: Agent heartbeat and health monitoring
+- [x] 08-03-05: Swarm consensus mechanism (voting, priority-based conflict resolution)
 - [ ] 08-03-06: Emergent task decomposition (swarm auto-splits large tasks)
 - [ ] 08-03-07: Agent spawning and lifecycle management
 - [ ] 08-03-08: Cross-agent communication (broadcast, direct, pub/sub)
@@ -363,11 +363,11 @@ class SharedKnowledge:
 **Goal:** Long-running background workers that process queue tasks, survive restarts, and report health
 
 **Subtasks:**
-- [ ] 08-04-01: Worker process architecture (Worker, WorkerConfig)
-- [ ] 08-04-02: Worker registration with discovery (Consul, etcd, or Redis-based)
-- [ ] 08-04-03: Worker pools (multiple workers per queue)
-- [ ] 08-04-04: Work stealing (idle workers grab tasks from busy workers)
-- [ ] 08-04-05: Graceful shutdown (drain tasks before exit)
+- [x] 08-04-01: Worker process architecture (Worker, WorkerConfig)
+- [x] 08-04-02: Worker registration with discovery (Consul, etcd, or Redis-based)
+- [x] 08-04-03: Worker pools (multiple workers per queue)
+- [x] 08-04-04: Work stealing (idle workers grab tasks from busy workers)
+- [x] 08-04-05: Graceful shutdown (drain tasks before exit)
 - [ ] 08-04-06: Worker health checks (heartbeat, CPU/memory monitoring)
 - [ ] 08-04-07: Crash recovery (restart worker, re-queue in-flight tasks)
 - [ ] 08-04-08: Worker scaling (auto-scale based on queue depth)
@@ -387,9 +387,9 @@ class SharedKnowledge:
 **Goal:** Real-time dashboard for swarm health, task metrics, and proactive alerting on failures
 
 **Subtasks:**
-- [ ] 08-05-01: Dashboard web UI (FastAPI + React or static HTML)
-- [ ] 08-05-02: Task metrics (queued, running, completed, failed, rate per minute)
-- [ ] 08-05-03: Swarm metrics (active agents, idle agents, tasks per agent)
+- [x] 08-05-01: Dashboard web UI (FastAPI + React or static HTML)
+- [x] 08-05-02: Task metrics (queued, running, completed, failed, rate per minute)
+- [x] 08-05-03: Swarm metrics (active agents, idle agents, tasks per agent)
 - [ ] 08-05-04: Queue depth over time (chart, alerts on backlog threshold)
 - [ ] 08-05-05: Alert rules engine (conditions, severity, notification targets)
 - [ ] 08-05-06: Notification channels (email, Slack, PagerDuty, webhooks)
@@ -438,9 +438,9 @@ ALERT_TASK_FAILED = AlertRule(
 **Goal:** External-facing API and CLI to interact with swarm, schedule tasks, and monitor execution
 
 **Subtasks:**
-- [ ] 08-06-01: REST API for queue operations (enqueue, dequeue, status, cancel)
-- [ ] 08-06-02: REST API for scheduler (schedule, unschedule, pause, resume)
-- [ ] 08-06-03: REST API for swarm (spawn, kill, status, broadcast)
+- [x] 08-06-01: REST API for queue operations (enqueue, dequeue, status, cancel)
+- [x] 08-06-02: REST API for scheduler (schedule, unschedule, pause, resume)
+- [x] 08-06-03: REST API for swarm (spawn, kill, status, broadcast)
 - [ ] 08-06-04: WebSocket support for real-time dashboard updates
 - [ ] 08-06-05: CLI commands for all API operations
 - [ ] 08-06-06: Authentication (API key, JWT for admin operations)
@@ -494,7 +494,7 @@ GET    /api/v1/tasks/{task_id}
 **Goal:** Multi-tenancy, RBAC, audit logging, and compliance features for enterprise deployment
 
 **Subtasks:**
-- [ ] 08-07-01: Multi-tenant isolation (namespace per tenant)
+- [x] 08-07-01: Multi-tenant isolation (namespace per tenant)
 - [ ] 08-07-02: Role-based access control (RBAC: admin, operator, viewer)
 - [ ] 08-07-03: Audit logging (all admin actions logged)
 - [ ] 08-07-04: SAML/OAuth SSO integration
@@ -626,7 +626,7 @@ volumes:
 | 05 | Tool & Prompt Optimization | 5 | ✅ Complete |
 | 06 | Production Hardening | 6 | ✅ Complete |
 | 07 | Integration & Testing | 4 | ✅ Complete |
-| 08 | Agent Swarm & Scheduled Automation | 8 | Planned |
+| 08 | 8/8 | Complete   | 2026-04-27 |
 | 09 | Self-Evolving & Futuristic | 10 | Planned |
 
 **Grand Total: 9 phases, 50 plans, 490+ subtasks**

@@ -11,7 +11,9 @@ This module provides the DeepAgent class that orchestrates the full pipeline:
 from __future__ import annotations
 
 import logging
+import uuid
 from dataclasses import dataclass, field
+from datetime import datetime
 from pathlib import Path
 from typing import Any, TypedDict
 
@@ -47,12 +49,13 @@ except ImportError as e:
 
 # Import Phase 4 LiveVerifier (with graceful degradation)
 try:
-    from luminamind.evaluator.live_verifier import LiveVerifier
+    from luminamind.evaluator.live_verifier import LiveVerifier, VerificationConfig
     _LIVE_VERIFIER_AVAILABLE = True
 except ImportError as e:
     logging.warning(f"Phase 4 (Live Verification) unavailable: {e}")
     _LIVE_VERIFIER_AVAILABLE = False
     LiveVerifier = None
+    VerificationConfig = None
 
 # Import Phase 5 optimization (with graceful degradation)
 try:
@@ -173,6 +176,10 @@ class DeepAgent:
         if _LIVE_VERIFIER_AVAILABLE and self.config.enable_live_verification:
             self._init_phase4()
 
+        # Import VerificationConfig for Phase 4
+        if _LIVE_VERIFIER_AVAILABLE:
+            from luminamind.evaluator.live_verifier import VerificationConfig
+
         # Initialize Phase 5 components
         self._token_budget: TokenBudget | None = None
         self._cache_optimizer: CacheOptimizer | None = None
@@ -221,7 +228,19 @@ class DeepAgent:
         """Initialize Phase 3: Planner & Sprint components."""
         try:
             self._planner = PlannerAgent()
-            self._sprint_contract = SprintContract()
+            from luminamind.planner.spec import SpecDocument
+            self._sprint_contract = SprintContract(
+                id=str(uuid.uuid4()),
+                spec=SpecDocument(
+                    id=str(uuid.uuid4()),
+                    title="Default Contract",
+                    description="Auto-generated contract for DeepAgent initialization",
+                    feature_request="Default feature request",
+                ),
+                parties=["planner", "evaluator"],
+                timeline={"start": datetime.utcnow().isoformat(), "end": None},
+                acceptance_criteria=[],
+            )
             self._contract_verifier = ContractVerifier()
             logger.debug("Phase 3 (Planner & Sprint) initialized")
         except Exception as e:
@@ -231,7 +250,9 @@ class DeepAgent:
     def _init_phase4(self) -> None:
         """Initialize Phase 4: Live Verification components."""
         try:
-            self._live_verifier = LiveVerifier()
+            self._live_verifier = LiveVerifier(
+                config=VerificationConfig()
+            )
             logger.debug("Phase 4 (Live Verification) initialized")
         except Exception as e:
             logger.warning(f"Failed to initialize Phase 4: {e}")
@@ -250,7 +271,7 @@ class DeepAgent:
     def _init_phase6(self) -> None:
         """Initialize Phase 6: Production Hardening components."""
         try:
-            self._circuit_breaker = CircuitBreaker()
+            self._circuit_breaker = CircuitBreaker(name="deep_agent_main")
             self._output_validator = OutputValidator()
             self._metrics = HarnessMetrics()
             logger.debug("Phase 6 (Safety/Observability) initialized")
@@ -541,3 +562,38 @@ def create_deep_agent(config: DeepAgentConfig | None = None) -> DeepAgent:
         Configured DeepAgent instance
     """
     return DeepAgent(config=config)
+
+
+# Module-level exports for CLI compatibility
+# main.py imports `app` and `agent_kwargs` from this module
+# We use a class wrapper to defer full initialization until first access
+
+
+class _LazyExport:
+    """Lazy loader that defers DeepAgent creation until first attribute access."""
+
+    _instance = None
+
+    def __getattr__(self, name):
+        if _LazyExport._instance is None:
+            _LazyExport._instance = create_deep_agent()
+        return getattr(_LazyExport._instance, name)
+
+
+class _LazyApp:
+    """Lazy app wrapper that creates DeepAgent on first use."""
+
+    _app = None
+
+    def __getattr__(self, attr):
+        if _LazyApp._app is None:
+            _LazyApp._app = create_deep_agent()._app
+        return getattr(_LazyApp._app, attr)
+
+
+# Module-level exports for CLI compatibility
+# main.py imports `app` and `agent_kwargs` from this module
+# app is lazily initialized on first attribute access
+# agent_kwargs is set up for CLI re-creation path
+app = _LazyApp()
+agent_kwargs = {}

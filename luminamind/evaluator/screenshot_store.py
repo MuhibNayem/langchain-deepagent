@@ -4,7 +4,7 @@ import dataclasses
 import hashlib
 import json
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -68,7 +68,7 @@ class ScreenshotStore:
             # Save metadata
             meta = ScreenshotMetadata(
                 url=url,
-                captured_at=datetime.utcnow().isoformat(),
+                captured_at=datetime.now(timezone.utc).isoformat(),
                 sha256=hashlib.sha256(image_bytes).hexdigest(),
                 width=metadata.get("width", 0),
                 height=metadata.get("height", 0),

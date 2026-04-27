@@ -1311,19 +1311,19 @@ After Phase 9, LuminaMind becomes:
 13. API events router is registered
 
 **Plans:**
-- [x] 11-01: Refinement pipeline datetime import — `.planning/phases/11-bugfix-round-2/11-01-PLAN.md`
-- [ ] 11-02: Visual regression detector Pillow API — `.planning/phases/11-bugfix-round-2/11-02-PLAN.md`
-- [ ] 11-03: Package test collection (missing deps) — `.planning/phases/11-bugfix-round-2/11-03-PLAN.md`
-- [ ] 11-04: Runtime dependency consistency (aiofiles, etc.) — `.planning/phases/11-bugfix-round-2/11-04-PLAN.md`
-- [ ] 11-05: API auth enforcement — `.planning/phases/11-bugfix-round-2/11-05-PLAN.md`
-- [ ] 11-06: DB verifier SQL injection prevention — `.planning/phases/11-bugfix-round-2/11-06-PLAN.md`
-- [ ] 11-07: Memory queue delay bug — `.planning/phases/11-bugfix-round-2/11-07-PLAN.md`
-- [ ] 11-08: TaskPool timeout signal safety — `.planning/phases/11-bugfix-round-2/11-08-PLAN.md`
-- [ ] 11-09: TaskPool execute_with_dependencies batch bug — `.planning/phases/11-bugfix-round-2/11-09-PLAN.md`
-- [ ] 11-10: Event buffer index corruption — `.planning/phases/11-bugfix-round-2/11-10-PLAN.md`
-- [ ] 11-11: Plugin sandbox abstract instantiation — `.planning/phases/11-bugfix-round-2/11-11-PLAN.md`
-- [ ] 11-12: Swarm send_to() validation (remaining) — `.planning/phases/11-bugfix-round-2/11-12-PLAN.md`
-- [ ] 11-13: API events router missing — `.planning/phases/11-bugfix-round-2/11-13-PLAN.md`
+17/13 plans complete
+- [x] 11-02: Visual regression detector Pillow API — `.planning/phases/11-bugfix-round-2/11-02-PLAN.md`
+- [x] 11-03: Package test collection (missing deps) — `.planning/phases/11-bugfix-round-2/11-03-PLAN.md`
+- [x] 11-04: Runtime dependency consistency (aiofiles, etc.) — `.planning/phases/11-bugfix-round-2/11-04-PLAN.md`
+- [x] 11-05: API auth enforcement — `.planning/phases/11-bugfix-round-2/11-05-PLAN.md`
+- [x] 11-06: DB verifier SQL injection prevention — `.planning/phases/11-bugfix-round-2/11-06-PLAN.md`
+- [x] 11-07: Memory queue delay bug — `.planning/phases/11-bugfix-round-2/11-07-PLAN.md`
+- [x] 11-08: TaskPool timeout signal safety — `.planning/phases/11-bugfix-round-2/11-08-PLAN.md`
+- [x] 11-09: TaskPool execute_with_dependencies batch bug — `.planning/phases/11-bugfix-round-2/11-09-PLAN.md`
+- [x] 11-10: Event buffer index corruption — `.planning/phases/11-bugfix-round-2/11-10-PLAN.md`
+- [x] 11-11: Plugin sandbox abstract instantiation — `.planning/phases/11-bugfix-round-2/11-11-PLAN.md`
+- [x] 11-12: Swarm send_to() validation (remaining) — `.planning/phases/11-bugfix-round-2/11-12-PLAN.md`
+- [x] 11-13: API events router missing — `.planning/phases/11-bugfix-round-2/11-13-PLAN.md`
 
 ---
 

@@ -1,5 +1,26 @@
-from .worker import Worker, WorkerConfig, WorkerStatus
-from .registry import WorkerRegistry, WorkerInfo
-from .lifecycle import LifecycleManager, GracefulShutdown
+"""Production Worker Module.
 
-__all__ = ["Worker", "WorkerConfig", "WorkerStatus", "WorkerRegistry", "WorkerInfo", "LifecycleManager", "GracefulShutdown"]
+Exports:
+- TaskWorker: Production-grade task worker with retry, timeout, and lifecycle
+- SwarmWorker: Swarm-integrated worker for multi-agent task execution
+- WorkerConfig: Configuration dataclass
+- WorkerResult: Result dataclass
+- TaskExecutor: Task execution engine
+"""
+from luminamind.worker.producer import (
+    TaskWorker,
+    SwarmWorker,
+    WorkerConfig,
+    WorkerResult,
+    TaskExecutor,
+    WorkerMode,
+)
+
+__all__ = [
+    "TaskWorker",
+    "SwarmWorker", 
+    "WorkerConfig",
+    "WorkerResult",
+    "TaskExecutor",
+    "WorkerMode",
+]

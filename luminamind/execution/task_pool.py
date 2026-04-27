@@ -152,7 +152,11 @@ class TaskPool:
 
             # Wait for batch to complete
             batch_results = self.wait_all()
-            all_results.extend(batch_results)
+            # Build result map to preserve ordering
+            result_map = {r.task_id: r for r in batch_results}
+            # Extend in batch order (dependency order) to maintain original task order
+            for task_id in batch:
+                all_results.append(result_map[task_id])
 
         return all_results
 

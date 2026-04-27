@@ -522,19 +522,123 @@ GET    /api/v1/tasks/{task_id}
 
 ---
 
+### Phase 8.8 — Installation & Distribution
+
+**Goal:** One-command install so users can run the harness with a single curl/powershell command, no manual setup required
+
+**Subtasks:**
+- [ ] 08-08-01: Docker image build (multi-stage build for minimal size)
+- [ ] 08-08-02: GHCR push workflow (GitHub Actions auto-build and push on tag)
+- [ ] 08-08-03: docker-compose.yml with all services (Redis, API, dashboard, workers)
+- [ ] 08-08-04: Cross-platform install scripts (macOS bash, Linux bash, Windows powershell)
+- [ ] 08-08-05: Homebrew tap setup (macOS `brew install luminamind`)
+- [ ] 08-08-06: APT repository setup (Linux debian repo)
+- [ ] 08-08-07: Auto-update mechanism (`luminamind update` pulls new image)
+- [ ] 08-08-08: One-command install (`curl -fsSL https://install.luminamind.sh | bash`)
+- [ ] 08-08-09: Uninstall script (clean removal of image, containers, config)
+- [ ] 08-08-10: Health check verification (post-install sanity check)
+
+**Files:**
+- `Dockerfile` — Multi-stage build (builder + runtime)
+- `docker-compose.yml` — All services: redis, api, dashboard, workers
+- `docker-compose.dev.yml` — Development mode with hot reload
+- `scripts/install.sh` — macOS/Linux install script
+- `scripts/install.ps1` — Windows install script
+- `scripts/uninstall.sh` — Clean uninstall
+- `scripts/update.sh` — Auto-update script
+- `.github/workflows/docker.yml` — GHCR build + push on tag
+- `homebrew/luminamind.rb` — Homebrew formula
+- `deb/` — APT repository files
+
+**docker-compose.yml structure:**
+```yaml
+version: '3.9'
+services:
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    restart: unless-stopped
+
+  api:
+    image: ghcr.io/amnayem/luminamind:latest
+    ports:
+      - "8000:8000"
+      - "8080:8080"
+      - "9090:9090"
+    depends_on:
+      - redis
+    environment:
+      - CHECKPOINT_REDIS_URL=redis://redis:6379
+      - RATE_LIMIT_REDIS_URL=redis://redis:6379
+    volumes:
+      - ./sessions:/app/sessions
+      - ./skills:/app/skills
+    restart: unless-stopped
+
+  worker:
+    image: ghcr.io/amnayem/luminamind:latest
+    command: worker start
+    depends_on:
+      - redis
+      - api
+    environment:
+      - CHECKPOINT_REDIS_URL=redis://redis:6379
+    scale: 3
+    restart: unless-stopped
+
+volumes:
+  redis_data:
+```
+
+**Install script behavior:**
+```bash
+# 1. Detect OS (macOS / Linux / Windows)
+# 2. Check Docker installed → install if missing
+# 3. Create ~/.luminamind/ config directory
+# 4. Pull latest image from GHCR
+# 5. Create docker-compose.yml from template
+# 6. Start services with docker-compose
+# 7. Run health check
+# 8. Print: "Luminamind running at http://localhost:8080"
+```
+
+---
+
 ## Phase 8 Summary
 
-| Plan | Focus | Plans | Dependencies |
-|------|-------|-------|--------------|
-| 08-01 | Task Queue & Persistence | 8 subtasks | Phase 4 complete |
-| 08-02 | Scheduler & Cron | 8 subtasks | 08-01 |
-| 08-03 | Agent Swarm Orchestration | 10 subtasks | 08-01, 08-02 |
-| 08-04 | Background Workers | 8 subtasks | 08-01, 08-02 |
-| 08-05 | Monitoring & Alerting | 10 subtasks | 08-03, 08-04 |
-| 08-06 | API & CLI | 10 subtasks | 08-01, 08-02, 08-03 |
-| 08-07 | Enterprise Features | 8 subtasks | 08-06 |
+| Plan | Focus | Subtasks | Dependencies |
+|------|-------|---------|--------------|
+| 08-01 | Task Queue & Persistence | 8 | Phase 4 complete |
+| 08-02 | Scheduler & Cron | 8 | 08-01 |
+| 08-03 | Agent Swarm Orchestration | 10 | 08-01, 08-02 |
+| 08-04 | Background Workers | 8 | 08-01, 08-02 |
+| 08-05 | Monitoring & Alerting | 10 | 08-03, 08-04 |
+| 08-06 | API & CLI | 10 | 08-01, 08-02, 08-03 |
+| 08-07 | Enterprise Features | 8 | 08-06 |
+| 08-08 | Installation & Distribution | 10 | All above |
 
-**Total Phase 8:** 7 plans, 62 subtasks
+**Total Phase 8:** 8 plans, 72 subtasks
+
+---
+
+## Full Roadmap Summary
+
+| Phase | Focus | Plans | Status |
+|-------|-------|-------|--------|
+| 01 | Context & Memory Infrastructure | 4 | ✅ Complete |
+| 02 | Generator-Evaluator Architecture | 8 | ✅ Complete |
+| 03 | Planner & Sprint System | 8 | ✅ Complete |
+| 04 | Live Verification Infrastructure | 5 | In Progress |
+| 05 | 5/5 | Complete   | 2026-04-27 |
+| 06 | Production Hardening | 6 | Planned |
+| 07 | Integration & Testing | 4 | Planned |
+| 08 | Agent Swarm & Scheduled Automation | 8 | Planned |
+| 09 | Self-Evolving & Futuristic | 9 | Planned |
+
+**Grand Total: 9 phases, 65 plans, 480+ subtasks**
 
 ---
 
@@ -830,6 +934,155 @@ class EventStream:
 
 ---
 
+### Phase 9.9 — Per-Role Model Selection
+
+**Goal:** Allow users to choose which LLM powers each agent role (planner, executor, evaluator, critic) via CLI, with visual routing in dashboard
+
+**Subtasks:**
+- [ ] 09-09-01: Role model registry (planner/executor/evaluator/critic roles, each configurable)
+- [ ] 09-09-02: CLI model selection commands (`luminamind config model --role planner --model opus-4.6`)
+- [ ] 09-09-03: Interactive model picker (`luminamind models --assign` with table of models)
+- [ ] 09-09-04: Config file support (`~/.luminamind/models.yaml` with role → model mapping)
+- [ ] 09-09-05: Model validation on startup (verify API keys exist for chosen models)
+- [ ] 09-09-06: Per-role model middleware (routes each role to its assigned model transparently)
+- [ ] 09-09-07: Dashboard visualization (show which model each role is using)
+- [ ] 09-09-08: Model override per task (`luminamind run --evaluator-model haiku-4.5 ...`)
+- [ ] 09-09-09: Preset profiles (`luminamind models --profile balanced`, `--profile fast`, `--profile quality`)
+- [ ] 09-09-10: Model capability display (`luminamind models --list` shows price, context, capabilities)
+- [ ] 09-09-11: Per-provider API key management (`luminamind config key --provider X --key Y`)
+- [ ] 09-09-12: Multi-provider support (MiniMax, Zhipu GLM, Moonshot Kimi, OpenAI, Anthropic)
+- [ ] 09-09-13: Free model detection (GLM-4.7-flash auto-detected as $0 cost)
+- [ ] 09-09-14: Cost-optimal preset (`free_optimal` — all free models where possible, paid only when needed)
+
+**Files:**
+- `luminamind/models/registry.py` — ModelRegistry, RoleModelMapping, ProviderConfig
+- `luminamind/models/middleware.py` — RoleModelMiddleware, ModelRouter
+- `luminamind/models/presets.py` — ModelPresets, PresetProfile
+- `luminamind/models/provider.py` — ProviderConfig (base_url, api_key_env, model_mapping)
+- `luminamind/models/pricing.py` — CostRegistry (free model detection, per-token pricing)
+- `luminamind/cli/models.py` — CLI group: `luminamind models`, `luminamind config model`
+- `luminamind/cli/keys.py` — CLI group: `luminamind config key --provider X --key Y`
+- `luminamind/models/validator.py` — ModelValidator, APICredentialChecker
+- `luminamind/monitoring/dashboard_templates/models.html` — Model routing display
+- `tests/unit/test_models.py` — Unit tests
+- `tests/integration/test_model_routing.py` — Integration tests
+
+**CLI Commands:**
+```bash
+# Show all available models with capabilities and prices
+luminamind models --list
+
+# Show current role → model assignments
+luminamind models --status
+
+# Set API keys per provider
+luminamind config key --provider minimax --key minimax_xxx
+luminamind config key --provider moonshot --key moonshot_xxx
+luminamind config key --provider zhipu --key zhipu_xxx
+
+# Assign model to role (provider/model format)
+luminamind config model --role planner --model moonshot/kimi-k2.6
+luminamind config model --role executor --model zhipu/glm-4.7-flash
+luminamind config model --role executor --model minimax/m2.7
+luminamind config model --role evaluator --model moonshot/kimi-k2.6
+luminamind config model --role critic --model zhipu/glm-4.7-flash
+
+# Use preset profile
+luminamind models --profile free_optimal  # All free models where possible
+luminamind models --profile balanced      # Mix based on role requirements
+luminamind models --profile quality       # All best models
+luminamind models --profile fast          # All cheap/fast models
+
+# Interactive picker
+luminamind models --assign
+
+# Override per task
+luminamind run "fix the auth bug" --evaluator-model zhipu/glm-4.7-flash
+
+# Show model cost estimate for a task
+luminamind models --estimate "write a REST API"
+```
+
+**Provider Configurations:**
+```yaml
+# ~/.luminamind/providers.yaml
+providers:
+  minimax:
+    base_url: https://api.minimax.io/v1
+    api_key_env: MINIMAX_API_KEY
+    models:
+      - name: minimax/m2.7
+        input_price: 0.50
+        output_price: 1.00
+        context: 128000
+
+  moonshot:
+    base_url: https://api.moonshot.ai/v1
+    api_key_env: MOONSHOT_API_KEY
+    models:
+      - name: moonshot/kimi-k2.6
+        input_price: 0.50
+        output_price: 1.00
+        context: 256000
+
+  zhipu:
+    base_url: https://api.z.ai/api/paas/v4
+    api_key_env: ZHIPU_API_KEY
+    models:
+      - name: zhipu/glm-4.7-flash
+        input_price: 0.00  # FREE
+        output_price: 0.00  # FREE
+        context: 131072
+```
+
+**Preset Profiles:**
+```yaml
+# ~/.luminamind/models.yaml
+preset: free_optimal
+
+presets:
+  free_optimal:
+    planner: moonshot/kimi-k2.6     # Paid - needed for complex reasoning
+    executor: zhipu/glm-4.7-flash   # FREE
+    evaluator: moonshot/kimi-k2.6  # Paid - needed for complex reasoning
+    critic: zhipu/glm-4.7-flash     # FREE
+  
+  balanced:
+    planner: moonshot/kimi-k2.6
+    executor: minimax/m2.7          # User's choice for better executor
+    evaluator: moonshot/kimi-k2.6
+    critic: zhipu/glm-4.7-flash
+  
+  quality:
+    planner: moonshot/kimi-k2.6
+    executor: moonshot/kimi-k2.6
+    evaluator: moonshot/kimi-k2.6
+    critic: minimax/m2.7
+  
+  fast:
+    planner: zhipu/glm-4.7-flash
+    executor: zhipu/glm-4.7-flash
+    evaluator: zhipu/glm-4.7-flash
+    critic: zhipu/glm-4.7-flash
+```
+
+**Dashboard visualization:**
+```
+┌─────────────────────────────────────────────────────────────┐
+│  Model Routing                              [Edit Models ▼] │
+├─────────────────────────────────────────────────────────────┤
+│  Role          Model                  Cost/1K tokens       │
+│  ─────────────────────────────────────────────────────────  │
+│  Planner       anthropic/opus-4.6     $15.00               │
+│  Executor      anthropic/sonnet-4.6   $3.00                 │
+│  Evaluator     anthropic/opus-4.6     $15.00                │
+│  Critic        anthropic/haiku-4.5    $0.25                 │
+│  Orchestrator  anthropic/sonnet-4.6  $3.00                 │
+├─────────────────────────────────────────────────────────────┤
+│  Est. task cost: $0.47  │  vs all-opus: $33.00 (98.6% saved)│
+└─────────────────────────────────────────────────────────────┘
+```
+
 ## Phase 9 Summary
 
 | Plan | Focus | Subtasks | Dependencies |
@@ -842,8 +1095,9 @@ class EventStream:
 | 09-06 | Recursive Meta-Reasoning | 8 | Phase 2 (evaluator), Phase 9-01 |
 | 09-07 | Model Cost Arbitrage | 10 | Phase 8 (API) |
 | 09-08 | Plugin & Extension System | 10 | Phase 7 (integration), Phase 9-03 |
+| 09-09 | Per-Role Model Selection | 14 | Phase 9-07 (model registry) |
 
-**Total Phase 9:** 8 plans, 64 subtasks
+**Total Phase 9:** 9 plans, 78 subtasks
 
 ---
 

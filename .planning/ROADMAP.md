@@ -18,10 +18,10 @@
 4. Context compaction maintains quality under max-token budget with recent-biased compression
 
 **Plans:**
-- [ ] 01-01: Two-layer memory architecture (SessionMemory, FullTranscript, WorkingMemory)
-- [ ] 01-02: Session resumption capability (SessionStore)
-- [ ] 01-03: Prompt prefix caching system (PromptPrefixBuilder)
-- [ ] 01-04: Context compaction (ContextCompactor with recent-biased compression)
+- [x] 01-01: Two-layer memory architecture (SessionMemory, FullTranscript, WorkingMemory) — `.planning/phases/01-context-memory/01-01-PLAN.md`
+- [x] 01-02: Session resumption capability (SessionStore) — `.planning/phases/01-context-memory/01-02-PLAN.md`
+- [x] 01-03: Prompt prefix caching system (PromptPrefixBuilder) — `.planning/phases/01-context-memory/01-03-PLAN.md`
+- [x] 01-04: Context compaction (ContextCompactor with recent-biased compression) — `.planning/phases/01-context-memory/01-04-PLAN.md`
 
 ---
 

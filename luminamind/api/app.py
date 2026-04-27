@@ -4,7 +4,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from .routes import queue as queue_router
 from .routes import scheduler as scheduler_router
 from .routes import swarm as swarm_router
-from .auth import create_api_key_auth
+from .auth import create_api_key_auth, verify_api_key
 from .middleware import RateLimitMiddleware
 
 
@@ -57,6 +57,7 @@ def create_app(task_queue=None, scheduler=None, swarm=None, auth=None) -> FastAP
     app.include_router(queue_router.router)
     app.include_router(scheduler_router.router)
     app.include_router(swarm_router.router)
+    app.include_router(events_router.router)
 
     @app.get("/health")
     def health():

@@ -26,4 +26,13 @@ PY_TOOL_REGISTRY = {
     "web_search": web_search,
 }
 
-__all__ = ["PY_TOOL_REGISTRY"]
+__all__ = ["PY_TOOL_REGISTRY", "TIERED_TOOL_REGISTRY"]
+
+
+def _get_tiered_registry():
+    """Lazy import to avoid circular dependency."""
+    from luminamind.config.tool_tier import create_tiered_registry, DEFAULT_TIER_ASSIGNMENTS
+    return create_tiered_registry(PY_TOOL_REGISTRY, DEFAULT_TIER_ASSIGNMENTS)
+
+
+TIERED_TOOL_REGISTRY = _get_tiered_registry()

@@ -107,11 +107,11 @@
 4. Recovery framework handles retries with exponential backoff
 
 **Plans:**
-- [ ] 05-01: Tool audit and tiering (core, extended, specialist tiers, context-dependent loading)
-- [ ] 05-02: Prompt preset library (CRUD, task-type mapping, A/B testing)
-- [ ] 05-03: Dynamic prompt composition (context-aware assembly, personality variations)
-- [ ] 05-04: Lifecycle hook system (on_init, on_start, on_step, on_complete, on_error, on_exit)
-- [ ] 05-05: Recovery and retry framework (exponential backoff, circuit breaker, fallback chain)
+- [x] 05-01: Tool audit and tiering (core, extended, specialist tiers, context-dependent loading) — `.planning/phases/05-tool-prompt-optimization/05-01-PLAN.md`
+- [x] 05-02: Prompt preset library (CRUD, task-type mapping, A/B testing) — `.planning/phases/05-tool-prompt-optimization/05-02-PLAN.md`
+- [x] 05-03: Dynamic prompt composition (context-aware assembly, personality variations) — `.planning/phases/05-tool-prompt-optimization/05-03-PLAN.md`
+- [x] 05-04: Lifecycle hook system (on_init, on_start, on_step, on_complete, on_error, on_exit) — `.planning/phases/05-tool-prompt-optimization/05-04-PLAN.md`
+- [x] 05-05: Recovery and retry framework (exponential backoff, circuit breaker, fallback chain) — `.planning/phases/05-tool-prompt-optimization/05-05-PLAN.md`
 
 ---
 

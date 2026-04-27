@@ -8,13 +8,17 @@ Per D-07: Stable content cached; dynamic content (tool results, user input) excl
 from __future__ import annotations
 
 import hashlib
+import logging
 import subprocess
 from pathlib import Path
 from typing import Any
 
 from pydantic import BaseModel
 
+from luminamind.optimization.cache_optimizer import CacheOptimizer
 from luminamind.py_tools.registry import PY_TOOL_REGISTRY
+
+logger = logging.getLogger(__name__)
 
 
 class WorkspaceSummary(BaseModel):
@@ -98,6 +102,7 @@ class PromptPrefixBuilder:
         """
         self.workspace = Path(workspace_path).resolve()
         self._cache: dict[str, tuple[str, WorkspaceSummary]] = {}
+        self._cache_optimizer = CacheOptimizer()
 
     def get_prefix(self, force_refresh: bool = False) -> str:
         """Return cached prompt prefix or regenerate if stale.
@@ -118,6 +123,22 @@ class PromptPrefixBuilder:
         summary = self._generate_summary()
         content = self._build_prefix(summary)
         self._cache[cache_key] = (content, summary)
+
+        # Identify stable segments for KV cache optimization
+        prompt_parts = [
+            {"content": content, "type": "system"},
+        ]
+        stable_segments = self._cache_optimizer.identify_stable_segments(prompt_parts)
+        if stable_segments:
+            cache_key_str = self._cache_optimizer.get_cache_key(stable_segments)
+            logger.debug(
+                "KV cache segments identified",
+                extra={
+                    "stable_segment_count": len(stable_segments),
+                    "cache_key": cache_key_str[:16],
+                }
+            )
+
         return content
 
     def _compute_cache_key(self) -> str:

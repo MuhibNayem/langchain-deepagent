@@ -12,6 +12,8 @@ import hashlib
 from dataclasses import dataclass, field
 from typing import Any
 
+from luminamind.optimization.token_budget import TokenBudget, BudgetAllocation
+
 
 @dataclass
 class CompressionResult:
@@ -68,7 +70,12 @@ class ContextCompactor:
         self._seen_files: dict[str, str] = {}  # path → content_hash
         self._turn_index: int = 0
 
-    def compact(self, messages: list[dict], prefix: str = "") -> CompressionResult:
+    def compact(
+        self,
+        messages: list[dict],
+        prefix: str = "",
+        max_tokens: int | BudgetAllocation | None = None
+    ) -> CompressionResult:
         """Compress message list to fit within max_tokens budget.
 
         Recent-biased: recent messages (by recent_ratio) are kept rich/uncompressed.
@@ -78,9 +85,25 @@ class ContextCompactor:
         Args:
             messages: List of message dicts to compress
             prefix: Prefix string (e.g., workspace summary) to account for in budget
+            max_tokens: Either int (legacy), BudgetAllocation (budget-aware), or None
 
         Returns:
             CompressionResult with compressed messages and stats
+        """
+        if isinstance(max_tokens, BudgetAllocation):
+            return self._budget_aware_compact(messages, prefix, max_tokens)
+        # Fall back to legacy behavior
+        return self._legacy_compact(messages, prefix, max_tokens)
+
+    def _budget_aware_compact(
+        self,
+        messages: list[dict],
+        prefix: str,
+        allocation: BudgetAllocation
+    ) -> CompressionResult:
+        """Budget-aware compaction using TokenBudget allocation.
+
+        Uses recent-biased compression but respects allocation.available_tokens.
         """
         if not messages:
             return CompressionResult(
@@ -91,13 +114,14 @@ class ContextCompactor:
                 token_budget_used=0,
             )
 
-        # Calculate available budget for messages (exclude prefix)
         prefix_tokens = self._estimate_tokens(prefix)
-        available = self.max_tokens - prefix_tokens
+        available = allocation.available_tokens - prefix_tokens
+
+        if available < 0:
+            available = 0
 
         total = len(messages)
         recent_count = int(total * self.recent_ratio)
-        compressed_count = total - recent_count
 
         result_messages: list[dict] = []
         tokens_used = 0
@@ -105,39 +129,99 @@ class ContextCompactor:
         # Add recent messages (rich - no compression)
         for msg in messages[-recent_count:]:
             msg_tokens = self._estimate_tokens(msg)
+            if tokens_used + msg_tokens > available:
+                summarized = self._summarize_message(msg, available_tokens=available - tokens_used)
+                summ_tokens = self._estimate_tokens(summarized)
+                if tokens_used + summ_tokens <= available:
+                    result_messages.append(summarized)
+                    tokens_used += summ_tokens
+                continue
+            result_messages.append(msg)
+            tokens_used += msg_tokens
+
+        # Add compressed older messages
+        remaining = available - tokens_used
+        for msg in messages[:-recent_count]:
+            compressed = self._compress_message(msg, self.compression_factor)
+            comp_tokens = self._estimate_tokens(compressed)
+
+            if tokens_used + comp_tokens > available:
+                summarized = self._summarize_message(msg, available_tokens=remaining)
+                comp_tokens = self._estimate_tokens(summarized)
+                if tokens_used + comp_tokens > available:
+                    if remaining > 50:
+                        min_summ = self._summarize_message(msg, available_tokens=remaining)
+                        min_tokens = self._estimate_tokens(min_summ)
+                        if tokens_used + min_tokens <= available:
+                            result_messages.append(min_summ)
+                            tokens_used += min_tokens
+                    continue
+            result_messages.append(compressed)
+            tokens_used += comp_tokens
+            remaining = available - tokens_used
+
+        return CompressionResult(
+            compressed_messages=result_messages,
+            original_count=total,
+            compressed_count=len(result_messages),
+            compression_ratio=len(result_messages) / total if total > 0 else 1.0,
+            token_budget_used=tokens_used + prefix_tokens,
+        )
+
+    def _legacy_compact(
+        self,
+        messages: list[dict],
+        prefix: str,
+        max_tokens: int | None
+    ) -> CompressionResult:
+        """Legacy compact method for backwards compatibility."""
+        if not messages:
+            return CompressionResult(
+                compressed_messages=[],
+                original_count=0,
+                compressed_count=0,
+                compression_ratio=1.0,
+                token_budget_used=0,
+            )
+
+        effective_max = max_tokens if max_tokens is not None else self.max_tokens
+        prefix_tokens = self._estimate_tokens(prefix)
+        available = effective_max - prefix_tokens
+
+        total = len(messages)
+        recent_count = int(total * self.recent_ratio)
+
+        result_messages: list[dict] = []
+        tokens_used = 0
+
+        for msg in messages[-recent_count:]:
+            msg_tokens = self._estimate_tokens(msg)
             remaining = available - tokens_used
 
             if tokens_used + msg_tokens > available:
-                # Quality fallback: try to fit with summarization
                 summarized = self._summarize_message(msg, available_tokens=remaining)
                 summ_tokens = self._estimate_tokens(summarized)
                 if tokens_used + summ_tokens <= available:
                     result_messages.append(summarized)
                     tokens_used += summ_tokens
                     continue
-                # If still doesn't fit, skip this message but don't break
-                # (allow older messages a chance)
                 continue
             result_messages.append(msg)
             tokens_used += msg_tokens
 
-        # Add compressed older messages
         for msg in messages[:-recent_count]:
-            # Apply compression to older messages
             compressed = self._compress_message(msg, self.compression_factor)
             comp_tokens = self._estimate_tokens(compressed)
             remaining = available - tokens_used
 
             if tokens_used + comp_tokens > available:
-                # Quality fallback: summarize instead of drop
                 compressed = self._summarize_message(msg, available_tokens=remaining)
                 comp_tokens = self._estimate_tokens(compressed)
                 if tokens_used + comp_tokens > available:
-                    # Still over budget - but try to fit just role+minimal content
                     compressed = self._summarize_message(msg, available_tokens=remaining)
                     comp_tokens = self._estimate_tokens(compressed)
                     if tokens_used + comp_tokens > available:
-                        continue  # drop if still over budget
+                        continue
             result_messages.append(compressed)
             tokens_used += comp_tokens
 
@@ -309,6 +393,163 @@ class ContextCompactor:
         """
         text = obj if isinstance(obj, str) else str(obj)
         return len(text) // 4
+
+    def compact(
+        self,
+        messages: list[dict],
+        prefix: str = "",
+        max_tokens: int | BudgetAllocation | None = None
+    ) -> CompressionResult:
+        """Compress message list to fit within max_tokens budget.
+
+        Recent-biased: recent messages (by recent_ratio) are kept rich/uncompressed.
+        Older messages are compressed with truncation. If still over budget,
+        quality fallback applies: summarize rather than drop.
+
+        Args:
+            messages: List of message dicts to compress
+            prefix: Prefix string (e.g., workspace summary) to account for in budget
+            max_tokens: Either int (legacy), BudgetAllocation (budget-aware), or None
+
+        Returns:
+            CompressionResult with compressed messages and stats
+        """
+        if isinstance(max_tokens, BudgetAllocation):
+            return self._budget_aware_compact(messages, prefix, max_tokens)
+        # Fall back to legacy behavior
+        return self._legacy_compact(messages, prefix, max_tokens)
+
+    def _budget_aware_compact(
+        self,
+        messages: list[dict],
+        prefix: str,
+        allocation: BudgetAllocation
+    ) -> CompressionResult:
+        """Budget-aware compaction using TokenBudget allocation.
+
+        Uses recent-biased compression per the original implementation,
+        but respects allocation.available_tokens for history.
+        """
+        prefix_tokens = self._estimate_tokens(prefix)
+        available = allocation.available_tokens - prefix_tokens
+
+        if available < 0:
+            available = 0
+
+        total = len(messages)
+        recent_count = int(total * self.recent_ratio)
+
+        result_messages: list[dict] = []
+        tokens_used = 0
+
+        # Add recent messages (rich - no compression)
+        for msg in messages[-recent_count:]:
+            msg_tokens = self._estimate_tokens(msg)
+            if tokens_used + msg_tokens > available:
+                # Summarize to fit
+                summarized = self._summarize_message(msg, available_tokens=available - tokens_used)
+                summ_tokens = self._estimate_tokens(summarized)
+                if tokens_used + summ_tokens <= available:
+                    result_messages.append(summarized)
+                    tokens_used += summ_tokens
+                continue
+            result_messages.append(msg)
+            tokens_used += msg_tokens
+
+        # Add compressed older messages
+        remaining = available - tokens_used
+        for msg in messages[:-recent_count]:
+            compressed = self._compress_message(msg, self.compression_factor)
+            comp_tokens = self._estimate_tokens(compressed)
+
+            if tokens_used + comp_tokens > available:
+                summarized = self._summarize_message(msg, available_tokens=remaining)
+                comp_tokens = self._estimate_tokens(summarized)
+                if tokens_used + comp_tokens > available:
+                    if remaining > 50:
+                        min_summ = self._summarize_message(msg, available_tokens=remaining)
+                        min_tokens = self._estimate_tokens(min_summ)
+                        if tokens_used + min_tokens <= available:
+                            result_messages.append(min_summ)
+                            tokens_used += min_tokens
+                    continue
+            result_messages.append(compressed)
+            tokens_used += comp_tokens
+            remaining = available - tokens_used
+
+        return CompressionResult(
+            compressed_messages=result_messages,
+            original_count=total,
+            compressed_count=len(result_messages),
+            compression_ratio=len(result_messages) / total if total > 0 else 1.0,
+            token_budget_used=tokens_used + prefix_tokens,
+        )
+
+    def _legacy_compact(
+        self,
+        messages: list[dict],
+        prefix: str,
+        max_tokens: int | None
+    ) -> CompressionResult:
+        """Legacy compact method for backwards compatibility."""
+        effective_max = max_tokens if max_tokens is not None else self.max_tokens
+
+        if not messages:
+            return CompressionResult(
+                compressed_messages=[],
+                original_count=0,
+                compressed_count=0,
+                compression_ratio=1.0,
+                token_budget_used=0,
+            )
+
+        prefix_tokens = self._estimate_tokens(prefix)
+        available = effective_max - prefix_tokens
+
+        total = len(messages)
+        recent_count = int(total * self.recent_ratio)
+
+        result_messages: list[dict] = []
+        tokens_used = 0
+
+        for msg in messages[-recent_count:]:
+            msg_tokens = self._estimate_tokens(msg)
+            remaining = available - tokens_used
+
+            if tokens_used + msg_tokens > available:
+                summarized = self._summarize_message(msg, available_tokens=remaining)
+                summ_tokens = self._estimate_tokens(summarized)
+                if tokens_used + summ_tokens <= available:
+                    result_messages.append(summarized)
+                    tokens_used += summ_tokens
+                    continue
+                continue
+            result_messages.append(msg)
+            tokens_used += msg_tokens
+
+        for msg in messages[:-recent_count]:
+            compressed = self._compress_message(msg, self.compression_factor)
+            comp_tokens = self._estimate_tokens(compressed)
+            remaining = available - tokens_used
+
+            if tokens_used + comp_tokens > available:
+                compressed = self._summarize_message(msg, available_tokens=remaining)
+                comp_tokens = self._estimate_tokens(compressed)
+                if tokens_used + comp_tokens > available:
+                    compressed = self._summarize_message(msg, available_tokens=remaining)
+                    comp_tokens = self._estimate_tokens(compressed)
+                    if tokens_used + comp_tokens > available:
+                        continue
+            result_messages.append(compressed)
+            tokens_used += comp_tokens
+
+        return CompressionResult(
+            compressed_messages=result_messages,
+            original_count=total,
+            compressed_count=len(result_messages),
+            compression_ratio=len(result_messages) / total if total > 0 else 1.0,
+            token_budget_used=tokens_used + prefix_tokens,
+        )
 
 
 # Auto-compaction integration helpers

@@ -1281,7 +1281,7 @@ After Phase 9, LuminaMind becomes:
 8. wait_for_completion() uses time.sleep not threading.sleep
 
 **Plans:**
-- [x] 10-01: Fix Swarm execution loop — `.planning/phases/10-bugfix-swarm-scheduler/10-01-PLAN.md`
+5/5 plans complete
 - [x] 10-02: Fix Scheduler persistence deadlock — `.planning/phases/10-bugfix-swarm-scheduler/10-02-PLAN.md`
 - [x] 10-03: Fix BoundedSubagent import bug — `.planning/phases/10-bugfix-swarm-scheduler/10-03-PLAN.md`
 - [x] 10-04: Integrate Swarm with agent_message_bus — `.planning/phases/10-bugfix-swarm-scheduler/10-04-PLAN.md`
@@ -1359,4 +1359,20 @@ PHASE 10 (Bug Fixes & Production Hardening)
 ├── 10.3 BoundedSubagent Import Fix ───────────────────┤
 ├── 10.4 Swarm Integration Fix ─────────────────────────┤
 └── 10.5 CLI Import Fix ───────────────────────────────┘
+          │
+          ▼
+PHASE 11 (Bug Fixes Round 2)
+├── 11.1 Refinement pipeline datetime import ─────────────┐
+├── 11.2 Visual regression detector Pillow API ───────────┤
+├── 11.3 Package test collection (missing deps) ───────────┤
+├── 11.4 Runtime dependency consistency (aiofiles, etc.) ──┤
+├── 11.5 API auth enforcement ─────────────────────────────┤
+├── 11.6 DB verifier SQL injection ───────────────────────┤
+├── 11.7 Memory queue delay bug ──────────────────────────┤
+├── 11.8 TaskPool timeout signal safety ───────────────────┤
+├── 11.9 TaskPool execute_with_dependencies batch bug ─────┤
+├── 11.10 Event buffer index corruption ──────────────────┤
+├── 11.11 Plugin sandbox abstract instantiation ────────────┤
+├── 11.12 Swarm send_to() validation (remaining) ───────────┤
+└── 11.13 API events router missing ─────────────────────┘
 ```

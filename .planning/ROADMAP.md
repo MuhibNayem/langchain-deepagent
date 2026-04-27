@@ -1,7 +1,7 @@
 # Roadmap
 
 **Project:** LuminaMind Harness Engineering
-**Phases:** 9 | **Status:** In Progress
+**Phases:** 10 | **Status:** In Progress
 
 ---
 
@@ -656,7 +656,7 @@ volumes:
 **Goal:** Closed-loop learning where successful executions are distilled into permanent skill modules, and failures become lessons injected into global reasoning
 
 **Subtasks:**
-- [ ] 09-01-01: Skill acquisition framework (atomic skill modules vs. whole-model changes)
+- [x] 09-01-01: Skill acquisition framework (atomic skill modules vs. whole-model changes)
 - [ ] 09-01-02: SKILL.md file format and persistence (structured lessons from successes)
 - [ ] 09-01-03: Structured failure lessons (AutoResearchClaw-style permanent injection)
 - [ ] 09-01-04: Closed-loop feedback integration (Judge → reward → skill update)
@@ -706,7 +706,7 @@ class LessonsLearned:
 **Goal:** Lightweight event-stream API enabling real-time dashboards, custom visualizers, and external integrations
 
 **Subtasks:**
-- [ ] 09-02-01: Event schema definition (AgentEvent, ToolEvent, TokenEvent, ErrorEvent)
+- [x] 09-02-01: Event schema definition (AgentEvent, ToolEvent, TokenEvent, ErrorEvent)
 - [ ] 09-02-02: SSE (Server-Sent Events) streaming endpoint
 - [ ] 09-02-03: WebSocket support for bidirectional communication
 - [ ] 09-02-04: Event buffering and replay capability
@@ -758,7 +758,7 @@ class EventStream:
 **Goal:** Isolated containerized execution environment for untrusted code, mimicking OpenHands sandbox architecture
 
 **Subtasks:**
-- [ ] 09-03-01: Sandbox architecture (Sandbox, SandboxConfig, SandboxBackend)
+- [x] 09-03-01: Sandbox architecture (Sandbox, SandboxConfig, SandboxBackend)
 - [ ] 09-03-02: Docker container provisioning (per-task container lifecycle)
 - [ ] 09-03-03: Container image management (base images, custom tool images)
 - [ ] 09-03-04: Network isolation and egress control
@@ -1262,13 +1262,30 @@ After Phase 9, LuminaMind becomes:
 
 **Total Phases 1-9:** 9 phases, 69+ plans, 400+ subtasks
 
-**What makes it "futuristic":**
-- **Self-improving**: Learns from every run → permanent skill growth
-- **Transparent**: Real-time token streaming, agent reasoning visible
-- **Isolated**: Docker sandbox for any code, any language
-- **Extensible**: Plugin ecosystem for community contributions
-- **Efficient**: Model arbitrage cuts costs 10x
-- **Self-aware**: Meta-reasoning optimizes own strategies
+---
+
+## Phase 10 — Bug Fixes & Production Hardening
+
+**Goal:** Fix critical bugs in Swarm execution, Scheduler persistence, BoundedSubagent, and CLI imports to make LuminaMind production-safe.
+
+**Requirements:** [Bug fixes from codebase audit]
+
+**Success Criteria:**
+1. Swarm agents consume messages from _message_queue (true execution loop)
+2. Scheduler persists without deadlock (RLock reentry fix)
+3. BoundedSubagent imports create_deep_agent correctly
+4. Swarm and agent_message_bus are integrated
+5. CLI imports app and agent_kwargs from deep_agent.py
+6. send_to() validates recipient existence
+7. get_status().total_tasks returns actual task count
+8. wait_for_completion() uses time.sleep not threading.sleep
+
+**Plans:**
+- [ ] 10-01: Fix Swarm execution loop — `.planning/phases/10-bugfix-swarm-scheduler/10-01-PLAN.md`
+- [ ] 10-02: Fix Scheduler persistence deadlock — `.planning/phases/10-bugfix-swarm-scheduler/10-02-PLAN.md`
+- [ ] 10-03: Fix BoundedSubagent import bug — `.planning/phases/10-bugfix-swarm-scheduler/10-03-PLAN.md`
+- [ ] 10-04: Integrate Swarm with agent_message_bus — `.planning/phases/10-bugfix-swarm-scheduler/10-04-PLAN.md`
+- [ ] 10-05: Fix CLI imports and get_status accuracy — `.planning/phases/10-bugfix-swarm-scheduler/10-05-PLAN.md`
 
 ---
 
@@ -1334,4 +1351,12 @@ PHASE 9 (Self-Evolving & Futuristic) ←── (true modern harness)
 ├── 9.6 Recursive Meta-Reasoning ────────┤
 ├── 9.7 Model Cost Arbitrage ─────────────┤
 └── 9.8 Plugin & Extension System ───────┘
+          │
+          ▼
+PHASE 10 (Bug Fixes & Production Hardening)
+├── 10.1 Swarm Execution Loop Fix ─────────────────────┐
+├── 10.2 Scheduler Persistence Deadlock Fix ───────────┤
+├── 10.3 BoundedSubagent Import Fix ───────────────────┤
+├── 10.4 Swarm Integration Fix ─────────────────────────┤
+└── 10.5 CLI Import Fix ───────────────────────────────┘
 ```

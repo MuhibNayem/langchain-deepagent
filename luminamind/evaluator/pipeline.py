@@ -129,7 +129,12 @@ class RefinementPipeline:
         current_artifact = initial_artifact
 
         # Run iteration loop via controller
+        start_time = time.time()
         result, stats = self.controller.run(current_artifact)
+        duration = time.time() - start_time
+
+        # Record harness metrics for the iteration run
+        self._record_iteration_metrics(session_id, result, stats, duration)
 
         # Log trace entry with decisions at iteration boundaries
         self._log_iteration_trace(session_id, current_artifact, result, stats)
@@ -305,6 +310,49 @@ class RefinementPipeline:
     def _get_iteration_guidance(self, result: GradingResult) -> str:
         """Get guidance for next iteration."""
         return f"Focus on: {', '.join(result.issues[:3])}"
+
+    def _record_iteration_metrics(
+        self,
+        session_id: str,
+        result: GradingResult,
+        stats: IterationStats,
+        duration: float,
+    ) -> None:
+        """Record harness metrics for the iteration run.
+
+        Records iteration count, evaluator scores, convergence status,
+        and sprint duration.
+        """
+        # Map stats.reason to status for ITERATION_COUNT
+        if stats.converged:
+            status = "converged"
+        elif stats.reason == "max_iterations":
+            status = "max_iter"
+        else:
+            status = "iterating"
+
+        # Build score breakdown from result (uses overall score as proxy for domain)
+        # In a full implementation, result would have domain breakdown
+        score_breakdown = {
+            "overall": result.score / 100.0,  # Normalize to 0-1
+        }
+
+        # Record iteration metrics
+        self._metrics.record_iteration(session_id, score_breakdown, status)
+
+        # Record agent calls for evaluator (success if score >= quality_gate)
+        self._metrics.record_agent_call("evaluator", result.score >= self.quality_gate)
+
+        # Record sprint duration
+        self._metrics.record_sprint_duration(session_id, duration)
+
+        # Set convergence status
+        if stats.converged:
+            self._metrics.set_convergence(session_id, "converged")
+        elif stats.reason == "max_iterations":
+            self._metrics.set_convergence(session_id, "failed")
+        else:
+            self._metrics.set_convergence(session_id, "iterating")
 
     def _log_iteration_trace(
         self,

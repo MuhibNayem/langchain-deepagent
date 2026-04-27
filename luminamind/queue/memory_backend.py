@@ -1,7 +1,7 @@
 import threading
 import time
 from typing import Optional
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from .task_queue import Task, TaskStatus, Priority, QueueBackend, QueueMetrics
 
@@ -18,7 +18,7 @@ class MemoryBackend(QueueBackend):
     def enqueue(self, task: Task, delay_seconds: int = 0) -> str:
         with self._lock:
             if delay_seconds > 0:
-                task.scheduled_at = datetime.utcnow()
+                task.scheduled_at = datetime.now() + timedelta(seconds=delay_seconds)
             
             task.status = TaskStatus.PENDING
             # Insert in priority order (higher priority first)
@@ -36,7 +36,7 @@ class MemoryBackend(QueueBackend):
         with self._lock:
             while True:
                 # Check for due delayed tasks AND get next non-delayed task
-                now = datetime.utcnow().timestamp()
+                now = datetime.now().timestamp()
                 i = 0
                 while i < len(self._pending):
                     task = self._pending[i]

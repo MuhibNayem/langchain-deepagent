@@ -9,11 +9,23 @@ lifecycle points.
 
 from __future__ import annotations
 
-from datetime import datetime
+import asyncio
+from datetime import datetime, timezone
 from enum import Enum
 from typing import Annotated, Any, Callable
 
 from pydantic import BaseModel, ConfigDict, Field
+
+
+class LifecycleEvent(str, Enum):
+    """Agent lifecycle events."""
+
+    ON_INIT = "on_init"  # Agent initialized
+    ON_START = "on_start"  # Agent started processing
+    ON_STEP = "on_step"  # Each agent step/turn
+    ON_COMPLETE = "on_complete"  # Agent completed successfully
+    ON_ERROR = "on_error"  # Agent encountered error
+    ON_EXIT = "on_exit"  # Agent exiting (cleanup)
 
 
 class HookContext(BaseModel):
@@ -25,7 +37,7 @@ class HookContext(BaseModel):
     session_id: str | None = None
     thread_id: str | None = None
     event_type: LifecycleEvent
-    timestamp: datetime = Field(default_factory=lambda: datetime.now())
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     metadata: dict[str, Any] = Field(default_factory=dict)
 
 
@@ -41,7 +53,7 @@ class HookEmitter:
 
     def __init__(self) -> None:
         self._handlers: dict[LifecycleEvent, list[HookCallback]] = {
-            event: [] for event in LifecycleEvent
+            e: [] for e in LifecycleEvent
         }
 
     def register(
@@ -93,7 +105,7 @@ class HookEmitter:
         else:
             context.event_type = event
 
-        context.timestamp = datetime.utcnow()
+        context.timestamp = datetime.now(timezone.utc)
 
         for callback in self._handlers[event]:
             try:

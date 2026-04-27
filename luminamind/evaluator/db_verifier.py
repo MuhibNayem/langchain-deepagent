@@ -1,12 +1,21 @@
-"""Database state verification with assertions."""
+"""Database state verification with assertions.
+
+SEC-01 Compliance: All SQL queries use parameterized queries to prevent SQL injection.
+Table and column names are validated against allowlists or isidentifier() check.
+Custom queries must be pre-validated by the caller.
+"""
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, Sequence
 from enum import Enum
 from datetime import datetime
 
 from luminamind.evaluator.schema_introspector import SchemaIntrospector, SchemaInfo
+
+# Pre-compiled regex for safe identifier patterns (alphanumeric + underscore)
+_SAFE_IDENTIFIER_RE = re.compile(r'^[a-zA-Z_][a-zA-Z0-9_]*$')
 
 
 class AssertionType(Enum):
@@ -20,6 +29,16 @@ class AssertionType(Enum):
     CUSTOM = "custom"
 
 
+def _is_safe_identifier(name: str) -> bool:
+    """Check if a name is a safe SQL identifier (table or column name)."""
+    return bool(_SAFE_IDENTIFIER_RE.match(name)) if name else False
+
+
+def _validate_identifier_list(names: list[str]) -> bool:
+    """Validate a list of identifiers are all safe."""
+    return all(_is_safe_identifier(n) for n in names)
+
+
 @dataclass
 class DBAssertion:
     """Database assertion to verify."""
@@ -29,6 +48,7 @@ class DBAssertion:
     table: str | None = None
     expected_count: int | None = None
     where_clause: str | None = None
+    where_params: Sequence[Any] | None = None  # SQL injection prevention: params for WHERE clause
     # For CELL_VALUE
     column: str | None = None
     expected_value: Any = None
@@ -141,11 +161,32 @@ class DatabaseVerifier:
         """Verify row count matches expected."""
         cursor = self.connection.cursor()
 
+        # SEC-01: Validate table name to prevent SQL injection
+        if not _is_safe_identifier(assertion.table):
+            return AssertionResult(
+                assertion=assertion,
+                passed=False,
+                message=f"Invalid table name: {assertion.table}",
+            )
+
         query = f"SELECT COUNT(*) FROM {assertion.table}"
         params = []
 
         if assertion.where_clause:
+            # SEC-01: Validate that WHERE clause uses parameterized placeholders
+            # Expected format: "column1 = %s AND column2 = %s"
+            # Parse to extract column names and validate them
+            where_pattern = re.compile(r'^([\w]+)\s*=\s*%s(\s+AND\s+([\w]+)\s*=\s*%s)*$')
+            match = where_pattern.match(assertion.where_clause)
+            if not match:
+                return AssertionResult(
+                    assertion=assertion,
+                    passed=False,
+                    message=f"Invalid WHERE clause pattern (must use parameterized %s): {assertion.where_clause}",
+                )
             query += f" WHERE {assertion.where_clause}"
+            if assertion.where_params:
+                params = list(assertion.where_params)
 
         cursor.execute(query, params)
         actual_count = cursor.fetchone()[0]
@@ -167,12 +208,33 @@ class DatabaseVerifier:
         """Verify cell value matches expected."""
         cursor = self.connection.cursor()
 
-        # Build query
+        # SEC-01: Validate table and column names to prevent SQL injection
+        if not _is_safe_identifier(assertion.table):
+            return AssertionResult(
+                assertion=assertion,
+                passed=False,
+                message=f"Invalid table name: {assertion.table}",
+            )
+        if not _is_safe_identifier(assertion.column):
+            return AssertionResult(
+                assertion=assertion,
+                passed=False,
+                message=f"Invalid column name: {assertion.column}",
+            )
+
+        # Build query with parameterized WHERE clause
         query = f"SELECT {assertion.column} FROM {assertion.table}"
         where_parts = []
         params = []
 
         if assertion.row_identifier:
+            # SEC-01: Validate all keys in row_identifier are safe identifiers
+            if not _validate_identifier_list(list(assertion.row_identifier.keys())):
+                return AssertionResult(
+                    assertion=assertion,
+                    passed=False,
+                    message=f"Invalid row_identifier keys: {list(assertion.row_identifier.keys())}",
+                )
             for key, value in assertion.row_identifier.items():
                 where_parts.append(f"{key} = %s")
                 params.append(value)
@@ -208,11 +270,26 @@ class DatabaseVerifier:
         """Verify row exists matching criteria."""
         cursor = self.connection.cursor()
 
+        # SEC-01: Validate table name to prevent SQL injection
+        if not _is_safe_identifier(assertion.table):
+            return AssertionResult(
+                assertion=assertion,
+                passed=False,
+                message=f"Invalid table name: {assertion.table}",
+            )
+
         query = f"SELECT 1 FROM {assertion.table}"
         where_parts = []
         params = []
 
         if assertion.row_identifier:
+            # SEC-01: Validate all keys in row_identifier are safe identifiers
+            if not _validate_identifier_list(list(assertion.row_identifier.keys())):
+                return AssertionResult(
+                    assertion=assertion,
+                    passed=False,
+                    message=f"Invalid row_identifier keys: {list(assertion.row_identifier.keys())}",
+                )
             for key, value in assertion.row_identifier.items():
                 where_parts.append(f"{key} = %s")
                 params.append(value)
@@ -236,11 +313,26 @@ class DatabaseVerifier:
         """Verify row does not exist matching criteria."""
         cursor = self.connection.cursor()
 
+        # SEC-01: Validate table name to prevent SQL injection
+        if not _is_safe_identifier(assertion.table):
+            return AssertionResult(
+                assertion=assertion,
+                passed=False,
+                message=f"Invalid table name: {assertion.table}",
+            )
+
         query = f"SELECT 1 FROM {assertion.table}"
         where_parts = []
         params = []
 
         if assertion.row_identifier:
+            # SEC-01: Validate all keys in row_identifier are safe identifiers
+            if not _validate_identifier_list(list(assertion.row_identifier.keys())):
+                return AssertionResult(
+                    assertion=assertion,
+                    passed=False,
+                    message=f"Invalid row_identifier keys: {list(assertion.row_identifier.keys())}",
+                )
             for key, value in assertion.row_identifier.items():
                 where_parts.append(f"{key} = %s")
                 params.append(value)
@@ -294,8 +386,23 @@ class DatabaseVerifier:
         )
 
     async def _verify_query_returns(self, assertion: DBAssertion) -> AssertionResult:
-        """Verify custom query returns expected result."""
+        """Verify custom query returns expected result.
+
+        WARNING: custom_query must be pre-validated by caller.
+        For safe operation, custom_query should use %s placeholders and
+        caller should provide custom_params list separately.
+        SEC-01: This method trusts the caller to validate custom_query.
+        Only SELECT statements are allowed.
+        """
         cursor = self.connection.cursor()
+
+        # SEC-01: Validate that custom_query is a SELECT statement (read-only)
+        if not assertion.custom_query or not assertion.custom_query.strip().upper().startswith('SELECT'):
+            return AssertionResult(
+                assertion=assertion,
+                passed=False,
+                message="custom_query must be a SELECT statement",
+            )
 
         cursor.execute(assertion.custom_query)
         result = cursor.fetchone()

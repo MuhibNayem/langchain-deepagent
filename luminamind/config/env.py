@@ -1,3 +1,4 @@
+import os
 import typer
 from pathlib import Path
 from dotenv import load_dotenv
@@ -152,3 +153,39 @@ def ensure_global_env() -> None:
     config_path = get_global_config_path()
     if not config_path.exists():
         configure_global_env(force=True)
+
+
+def validate_env() -> bool:
+    """
+    Validate that required environment variables are set.
+
+    Required (at least one):
+    - LLM_API_KEY or LLM_BASE_URL (for OpenAI-compatible API)
+    - OLLAMA_BASE_URL (for Ollama)
+
+    Optional:
+    - REDIS_URL: Redis URL for checkpoint persistence
+    - SESSION_DIR: Directory for session storage
+    - LOG_LEVEL: Logging level (DEBUG, INFO, WARNING, ERROR)
+
+    Returns:
+        True if validation passes
+
+    Raises:
+        ValueError: If required variables are missing
+    """
+    has_api_key = bool(os.environ.get("LLM_API_KEY") or os.environ.get("GLM_API_KEY"))
+    has_base_url = bool(os.environ.get("LLM_BASE_URL") or os.environ.get("GLM_API_BASE"))
+    has_ollama = bool(os.environ.get("OLLAMA_BASE_URL"))
+
+    if not (has_api_key or has_base_url or has_ollama):
+        raise ValueError(
+            "Missing required environment variables. At least one of:\n"
+            "  - LLM_API_KEY / GLM_API_KEY (with LLM_BASE_URL / GLM_API_BASE)\n"
+            "  - LLM_BASE_URL\n"
+            "  - OLLAMA_BASE_URL\n"
+            "\n"
+            "Set one of these in your environment or .env file."
+        )
+
+    return True

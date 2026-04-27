@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 import pickle
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
@@ -15,6 +16,23 @@ except ImportError:  # pragma: no cover
     RedisError = Exception  # type: ignore[misc,assignment]
 
 REDIS_KEY = os.environ.get("CHECKPOINT_REDIS_KEY", "langgraph:checkpoints")
+
+
+@dataclass
+class CheckpointConfig:
+    """Configuration for checkpoint persistence.
+
+    Attributes:
+        backend: Storage backend ("memory", "redis", "filesystem")
+        session_dir: Directory path for filesystem backend
+        redis_url: Redis URL for redis backend
+        ttl_seconds: Time-to-live for checkpoints in seconds
+    """
+
+    backend: str = "memory"
+    session_dir: Path | None = None
+    redis_url: str | None = None
+    ttl_seconds: int = 3600
 
 
 def _load_state(target: MemorySaver, payload: bytes) -> None:
@@ -139,20 +157,49 @@ class FileBackedMemorySaver(MemorySaver):
         self._persist()
 
 
-def create_checkpointer() -> MemorySaver:
-    """Factory mirroring original JS logic."""
-    redis_url = os.environ.get("CHECKPOINT_REDIS_URL")
-    if redis_url:
+def create_checkpointer(config: CheckpointConfig | None = None) -> MemorySaver:
+    """Factory for creating a checkpointer.
+
+    Args:
+        config: CheckpointConfig instance. If None, uses environment-based detection.
+
+    Returns:
+        MemorySaver instance backed by the configured backend
+    """
+    config = config or CheckpointConfig()
+
+    # Override from environment if backend not specified
+    if config.backend == "memory":
+        redis_url = os.environ.get("CHECKPOINT_REDIS_URL") or config.redis_url
+        if redis_url:
+            if Redis is None:
+                raise ImportError("redis package required for RedisBackedMemorySaver")
+            client = Redis.from_url(redis_url, decode_responses=False)
+            return RedisBackedMemorySaver(client, REDIS_KEY)
+
+        directory = os.environ.get("CHECKPOINT_DIR") or config.session_dir
+        if directory:
+            return FileBackedMemorySaver(directory)
+
+    elif config.backend == "redis":
+        redis_url = config.redis_url or os.environ.get("CHECKPOINT_REDIS_URL")
+        if not redis_url:
+            raise ValueError("Redis backend requires redis_url in config or CHECKPOINT_REDIS_URL env var")
         if Redis is None:
             raise ImportError("redis package required for RedisBackedMemorySaver")
         client = Redis.from_url(redis_url, decode_responses=False)
         return RedisBackedMemorySaver(client, REDIS_KEY)
 
-    directory = os.environ.get("CHECKPOINT_DIR")
-    if directory:
+    elif config.backend == "filesystem":
+        directory = config.session_dir or Path("./sessions")
         return FileBackedMemorySaver(directory)
 
     return MemorySaver()
 
 
-__all__ = ["create_checkpointer", "FileBackedMemorySaver", "RedisBackedMemorySaver"]
+__all__ = [
+    "create_checkpointer",
+    "CheckpointConfig",
+    "FileBackedMemorySaver",
+    "RedisBackedMemorySaver",
+]

@@ -21,11 +21,12 @@ class MemoryBackend(QueueBackend):
                 task.scheduled_at = datetime.utcnow()
             
             task.status = TaskStatus.PENDING
-            # Insert in priority order
-            insert_pos = 0
+            # Insert in priority order (higher priority first)
+            insert_pos = len(self._pending)
             for i, t in enumerate(self._pending):
                 if t.priority.value < task.priority.value:
-                    insert_pos = i + 1
+                    insert_pos = i
+                    break
             self._pending.insert(insert_pos, task)
             return task.id
     
@@ -34,24 +35,19 @@ class MemoryBackend(QueueBackend):
         
         with self._lock:
             while True:
-                # Check for delayed tasks due now
+                # Check for due delayed tasks AND get next non-delayed task
                 now = datetime.utcnow().timestamp()
-                for i, task in enumerate(self._pending):
-                    if task.scheduled_at and task.scheduled_at.timestamp() <= now:
-                        task = self._pending.pop(i)
+                i = 0
+                while i < len(self._pending):
+                    task = self._pending[i]
+                    # Task is due (no delay or delay expired)
+                    if not task.scheduled_at or task.scheduled_at.timestamp() <= now:
+                        self._pending.pop(i)
                         task.status = TaskStatus.RUNNING
                         task.started_at = datetime.utcnow()
                         self._running[task.id] = task
                         return task
-                
-                # Get next non-delayed task
-                for task in self._pending:
-                    if not task.scheduled_at:
-                        self._pending.remove(task)
-                        task.status = TaskStatus.RUNNING
-                        task.started_at = datetime.utcnow()
-                        self._running[task.id] = task
-                        return task
+                    i += 1
                 
                 # No tasks available
                 if timeout_seconds == 0:
@@ -79,6 +75,7 @@ class MemoryBackend(QueueBackend):
             
             if task.attempts >= task.max_attempts:
                 task.status = TaskStatus.DEAD_LETTER
+                # Store by ID for get_status lookup
                 self._dead_letter.append(task)
             else:
                 task.status = TaskStatus.PENDING
@@ -108,6 +105,9 @@ class MemoryBackend(QueueBackend):
                     return task.status
             if task_id in self._running:
                 return self._running[task_id].status
+            for task in self._dead_letter:
+                if task.id == task_id:
+                    return task.status
             return TaskStatus.PENDING
     
     def get_metrics(self) -> QueueMetrics:

@@ -64,7 +64,8 @@ class RedisBackend(QueueBackend):
         else:
             # Immediate task: push to priority queue
             self.redis.hset(self.meta_key, task.id, json.dumps(data))
-            score = (256 - task.priority.value) * 1e9 + task.created_at.timestamp()
+            # Higher priority = higher score (for zpopmax to return highest priority first)
+            score = (task.priority.value * 1e9) - task.created_at.timestamp()
             self.redis.zadd(self.priority_key, {task.id: score})
         
         return task.id
@@ -82,6 +83,7 @@ class RedisBackend(QueueBackend):
                 task.started_at = datetime.utcnow()
                 self.redis.hset(self.meta_key, task_id, json.dumps(self._task_to_dict(task)))
                 self.redis.zrem(self.queue_key, task_id)
+                self.redis.zrem(self.priority_key, task_id)
                 self.redis.hset(self.running_key, task_id, json.dumps(self._task_to_dict(task)))
                 return task
         
@@ -107,9 +109,12 @@ class RedisBackend(QueueBackend):
         self.redis.hdel(self.running_key, task_id)
     
     def nack(self, task_id: str, error: str) -> None:
-        data = self.redis.hget(self.meta_key, task_id)
+        data = self.redis.hget(self.running_key, task_id)
         if not data:
-            return
+            # Fallback: try meta_key (for tasks not in running)
+            data = self.redis.hget(self.meta_key, task_id)
+            if not data:
+                return
         
         task = self._dict_to_task(json.loads(data))
         task.attempts += 1
@@ -130,7 +135,10 @@ class RedisBackend(QueueBackend):
             self.redis.zadd(self.queue_key, {task_id: execute_at})
     
     def cancel(self, task_id: str) -> bool:
-        data = self.redis.hget(self.meta_key, task_id)
+        # Check running first, then pending
+        data = self.redis.hget(self.running_key, task_id)
+        if not data:
+            data = self.redis.hget(self.meta_key, task_id)
         if not data:
             return False
         
@@ -139,6 +147,7 @@ class RedisBackend(QueueBackend):
         self.redis.hset(self.meta_key, task_id, json.dumps(self._task_to_dict(task)))
         self.redis.hdel(self.running_key, task_id)
         self.redis.zrem(self.queue_key, task_id)
+        self.redis.zrem(self.priority_key, task_id)
         return True
     
     def get_status(self, task_id: str) -> TaskStatus:

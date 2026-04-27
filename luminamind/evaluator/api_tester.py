@@ -6,7 +6,7 @@ import json
 import time
 from dataclasses import dataclass, field
 from typing import Any
-from datetime import datetime
+from datetime import datetime, timezone
 
 import aiohttp
 from pathlib import Path
@@ -154,7 +154,7 @@ class APITester:
                 
                 # Build log
                 log = RequestLog(
-                    timestamp=datetime.utcnow().isoformat(),
+                    timestamp=datetime.now(timezone.utc).isoformat(),
                     method=endpoint.method,
                     url=url,
                     path_params=path_params,
@@ -184,7 +184,7 @@ class APITester:
         except Exception as e:
             duration_ms = (time.time() - start_time) * 1000
             log = RequestLog(
-                timestamp=datetime.utcnow().isoformat(),
+                timestamp=datetime.now(timezone.utc).isoformat(),
                 method=endpoint.method,
                 url=url,
                 path_params=path_params,

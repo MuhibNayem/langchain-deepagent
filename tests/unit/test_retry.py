@@ -127,13 +127,15 @@ def test_circuit_breaker_decorator():
         call_count["count"] += 1
         raise ValueError("fail")
 
-    # First two calls fail but circuit stays closed
-    failing_func()
-    failing_func()
+    # First two calls fail but circuit stays closed (until after 2nd failure)
+    with pytest.raises(ValueError):
+        failing_func()  # Call 1: ValueError, circuit CLOSED after
+    with pytest.raises(ValueError):
+        failing_func()  # Call 2: ValueError, circuit opens AFTER this
 
     # Third call opens circuit
     with pytest.raises(CircuitBreakerOpen):
-        failing_func()
+        failing_func()  # Call 3: CircuitBreakerOpen, circuit already OPEN
 
     assert cb.state == CircuitState.OPEN
 
@@ -146,14 +148,16 @@ async def test_circuit_breaker_async():
     async def async_fails():
         raise ValueError("async fail")
 
-    # Open the circuit
-    try:
-        await async_fails()
-    except ValueError:
-        pass
+    # Open the circuit - first two failures leave circuit closed
+    # (circuit opens AFTER second failure)
+    with pytest.raises(ValueError):
+        await async_fails()  # Call 1: ValueError
+    with pytest.raises(ValueError):
+        await async_fails()  # Call 2: ValueError, circuit opens AFTER
 
+    # Third call raises CircuitBreakerOpen
     with pytest.raises(CircuitBreakerOpen):
-        await async_fails()
+        await async_fails()  # Call 3: CircuitBreakerOpen
 
 
 def test_fallback_chain():

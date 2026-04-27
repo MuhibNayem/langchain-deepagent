@@ -1,5 +1,7 @@
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, HTTPException, Depends, Security
 from typing import Optional
+
+from luminamind.api.auth import verify_api_key
 
 router = APIRouter(prefix="/api/v1/scheduler", tags=["scheduler"])
 
@@ -10,7 +12,7 @@ def get_scheduler():
 
 
 @router.post("/schedule")
-def schedule_task(
+async def schedule_task(
     task_type: str,
     cron: str = None,
     payload: dict = {},
@@ -18,6 +20,7 @@ def schedule_task(
     timezone: str = "UTC",
     run_missed: bool = False,
     scheduler=Depends(get_scheduler),
+    api_key: str = Security(verify_api_key),
 ):
     """Schedule a task."""
     if scheduler is None:
@@ -42,7 +45,7 @@ def schedule_task(
 
 
 @router.get("/list")
-def list_scheduled_tasks(scheduler=Depends(get_scheduler)):
+async def list_scheduled_tasks(scheduler=Depends(get_scheduler), api_key: str = Security(verify_api_key)):
     """List all scheduled tasks."""
     if scheduler is None:
         raise HTTPException(status_code=503, detail="Scheduler not configured")
@@ -65,7 +68,7 @@ def list_scheduled_tasks(scheduler=Depends(get_scheduler)):
 
 
 @router.delete("/unschedule/{task_id}")
-def unschedule_task(task_id: str, scheduler=Depends(get_scheduler)):
+async def unschedule_task(task_id: str, scheduler=Depends(get_scheduler), api_key: str = Security(verify_api_key)):
     """Unschedule a task."""
     if scheduler is None:
         raise HTTPException(status_code=503, detail="Scheduler not configured")
@@ -77,7 +80,7 @@ def unschedule_task(task_id: str, scheduler=Depends(get_scheduler)):
 
 
 @router.put("/pause/{task_id}")
-def pause_task(task_id: str, scheduler=Depends(get_scheduler)):
+async def pause_task(task_id: str, scheduler=Depends(get_scheduler), api_key: str = Security(verify_api_key)):
     """Pause a scheduled task."""
     if scheduler is None:
         raise HTTPException(status_code=503, detail="Scheduler not configured")
@@ -89,7 +92,7 @@ def pause_task(task_id: str, scheduler=Depends(get_scheduler)):
 
 
 @router.put("/resume/{task_id}")
-def resume_task(task_id: str, scheduler=Depends(get_scheduler)):
+async def resume_task(task_id: str, scheduler=Depends(get_scheduler), api_key: str = Security(verify_api_key)):
     """Resume a paused task."""
     if scheduler is None:
         raise HTTPException(status_code=503, detail="Scheduler not configured")

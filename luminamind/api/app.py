@@ -4,6 +4,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from .routes import queue as queue_router
 from .routes import scheduler as scheduler_router
 from .routes import swarm as swarm_router
+from .routes import events as events_router
 from .auth import create_api_key_auth, verify_api_key
 from .middleware import RateLimitMiddleware
 
@@ -52,6 +53,9 @@ def create_app(task_queue=None, scheduler=None, swarm=None, auth=None) -> FastAP
 
     if swarm is not None:
         app.dependency_overrides[swarm_router.get_swarm] = lambda: swarm
+
+    # Override auth dependency with the auth handler
+    app.dependency_overrides[verify_api_key] = auth_handler
 
     # Include routers
     app.include_router(queue_router.router)

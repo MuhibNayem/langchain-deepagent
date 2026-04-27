@@ -1,5 +1,7 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Security
 from typing import Optional
+
+from luminamind.api.auth import verify_api_key
 
 router = APIRouter(prefix="/api/v1/queue", tags=["queue"])
 
@@ -10,11 +12,12 @@ def get_task_queue():
 
 
 @router.post("/enqueue")
-def enqueue_task(
+async def enqueue_task(
     task_type: str,
     payload: dict = {},
     priority: str = "NORMAL",
     task_queue=Depends(get_task_queue),
+    api_key: str = Security(verify_api_key),
 ):
     """Enqueue a task into the queue."""
     if task_queue is None:
@@ -36,7 +39,7 @@ def enqueue_task(
 
 
 @router.get("/status/{task_id}")
-def get_task_status(task_id: str, task_queue=Depends(get_task_queue)):
+async def get_task_status(task_id: str, task_queue=Depends(get_task_queue), api_key: str = Security(verify_api_key)):
     """Get status of a task."""
     if task_queue is None:
         raise HTTPException(status_code=503, detail="Task queue not configured")
@@ -48,7 +51,7 @@ def get_task_status(task_id: str, task_queue=Depends(get_task_queue)):
 
 
 @router.delete("/cancel/{task_id}")
-def cancel_task(task_id: str, task_queue=Depends(get_task_queue)):
+async def cancel_task(task_id: str, task_queue=Depends(get_task_queue), api_key: str = Security(verify_api_key)):
     """Cancel a task."""
     if task_queue is None:
         raise HTTPException(status_code=503, detail="Task queue not configured")
@@ -60,7 +63,7 @@ def cancel_task(task_id: str, task_queue=Depends(get_task_queue)):
 
 
 @router.get("/metrics")
-def get_queue_metrics(task_queue=Depends(get_task_queue)):
+async def get_queue_metrics(task_queue=Depends(get_task_queue), api_key: str = Security(verify_api_key)):
     """Get queue metrics."""
     if task_queue is None:
         raise HTTPException(status_code=503, detail="Task queue not configured")

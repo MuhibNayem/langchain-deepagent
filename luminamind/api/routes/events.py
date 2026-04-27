@@ -1,10 +1,11 @@
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, Security
 from fastapi.responses import StreamingResponse
 from starlette.requests import Request
 from typing import Optional
 
 from luminamind.events import EventStream, EventSubscription
 from luminamind.events.schema import AgentEventType
+from luminamind.api.auth import verify_api_key
 
 router = APIRouter(prefix="/events", tags=["events"])
 
@@ -25,6 +26,7 @@ async def get_events(
     task_id: Optional[str] = None,
     agent_id: Optional[str] = None,
     event_types: Optional[str] = None,  # comma-separated
+    api_key: str = Security(verify_api_key),
 ):
     """SSE endpoint for event streaming."""
     # Parse event_types
@@ -62,7 +64,8 @@ async def get_events(
 async def replay_events(
     session_id: str,
     from_event_id: Optional[str] = None,
-    limit: int = Query(default=100, le=1000)
+    limit: int = Query(default=100, le=1000),
+    api_key: str = Security(verify_api_key),
 ):
     """Get buffered events for replay."""
     es = get_event_stream()

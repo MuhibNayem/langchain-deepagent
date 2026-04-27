@@ -1,5 +1,7 @@
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, HTTPException, Depends, Security
 from typing import Optional
+
+from luminamind.api.auth import verify_api_key
 
 router = APIRouter(prefix="/api/v1/swarm", tags=["swarm"])
 
@@ -10,10 +12,11 @@ def get_swarm():
 
 
 @router.post("/spawn")
-def spawn_agent(
+async def spawn_agent(
     role: str,
     config: dict = {},
     swarm=Depends(get_swarm),
+    api_key: str = Security(verify_api_key),
 ):
     """Spawn an agent in the swarm."""
     if swarm is None:
@@ -36,7 +39,7 @@ def spawn_agent(
 
 
 @router.delete("/kill/{agent_id}")
-def kill_agent(agent_id: str, swarm=Depends(get_swarm)):
+async def kill_agent(agent_id: str, swarm=Depends(get_swarm), api_key: str = Security(verify_api_key)):
     """Kill an agent in the swarm."""
     if swarm is None:
         raise HTTPException(status_code=503, detail="Swarm not configured")
@@ -48,7 +51,7 @@ def kill_agent(agent_id: str, swarm=Depends(get_swarm)):
 
 
 @router.get("/status")
-def get_swarm_status(swarm=Depends(get_swarm)):
+async def get_swarm_status(swarm=Depends(get_swarm), api_key: str = Security(verify_api_key)):
     """Get swarm status."""
     if swarm is None:
         raise HTTPException(status_code=503, detail="Swarm not configured")
@@ -63,11 +66,12 @@ def get_swarm_status(swarm=Depends(get_swarm)):
 
 
 @router.post("/broadcast")
-def broadcast_message(
+async def broadcast_message(
     message_type: str,
     payload: dict = {},
     sender_id: str = "api",
     swarm=Depends(get_swarm),
+    api_key: str = Security(verify_api_key),
 ):
     """Broadcast a message to all agents in the swarm."""
     if swarm is None:
@@ -81,7 +85,7 @@ def broadcast_message(
 
 
 @router.get("/agents")
-def list_agents(swarm=Depends(get_swarm)):
+async def list_agents(swarm=Depends(get_swarm), api_key: str = Security(verify_api_key)):
     """List all agents in the swarm."""
     if swarm is None:
         raise HTTPException(status_code=503, detail="Swarm not configured")

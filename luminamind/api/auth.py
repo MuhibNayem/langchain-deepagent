@@ -20,3 +20,13 @@ def create_api_key_auth() -> APIKeyAuth:
     import os
     keys = os.environ.get("LUMINAMIND_API_KEYS", "").split(",")
     return APIKeyAuth([k.strip() for k in keys if k.strip()])
+
+
+async def verify_api_key(api_key: str = Security(API_KEY_HEADER)) -> str:
+    """Dependency for verifying API key authentication.
+
+    This function is intended to be overridden in app.py with the actual
+    APIKeyAuth instance that validates against configured keys.
+    """
+    # Default implementation rejects all requests unless overridden
+    raise HTTPException(status_code=401, detail="Authentication not configured")

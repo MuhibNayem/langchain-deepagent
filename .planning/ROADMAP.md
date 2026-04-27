@@ -149,29 +149,10 @@
 3. Chaos testing validates resilience to network/LLM failures
 
 **Plans:**
-- [ ] 07-01: End-to-end integration (wire Phase 1-6 components, configuration management)
-- [ ] 07-02: Demo applications (frontend design demo, full-stack app demo, code review demo)
-- [ ] 07-03: Benchmark harness (100+ test cases, automated scoring, regression detection)
-- [ ] 07-04: Chaos testing (network failure simulation, LLM timeout/failure simulation)
-
----
-
-## Phase 7 — Integration & Testing
-
-**Goal:** Wire all components into unified harness and establish regression test suite
-
-**Requirements:** [All new — no existing map]
-
-**Success Criteria:**
-1. End-to-end harness matches Claude Code quality (human evaluation survey)
-2. Benchmark suite (100+ cases) enables automated scoring
-3. Chaos testing validates resilience to network/LLM failures
-
-**Plans:**
-- [ ] 07-01: End-to-end integration (wire Phase 1-6 components, configuration management)
-- [ ] 07-02: Demo applications (frontend design demo, full-stack app demo, code review demo)
-- [ ] 07-03: Benchmark harness (100+ test cases, automated scoring, regression detection)
-- [ ] 07-04: Chaos testing (network failure simulation, LLM timeout/failure simulation)
+- [x] 07-01: End-to-end integration (wire Phase 1-6 components, configuration management)
+- [x] 07-02: Demo applications (frontend design demo, full-stack app demo, code review demo)
+- [x] 07-03: Benchmark harness (100+ test cases, automated scoring, regression detection)
+- [x] 07-04: Chaos testing (network failure simulation, LLM timeout/failure simulation)
 
 ---
 

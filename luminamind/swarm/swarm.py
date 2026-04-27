@@ -101,6 +101,8 @@ class Swarm:
         with self._lock:
             if not self._validate_sender(message.sender_id):
                 raise ValueError(f"Invalid sender_id: {message.sender_id}")
+            if agent_id not in self._agents or self._agents[agent_id].status == "dead":
+                raise ValueError(f"Invalid recipient_id: {agent_id}")
             message.recipient_id = agent_id
             self._message_queue.append(message)
 

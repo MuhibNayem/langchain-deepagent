@@ -11,6 +11,7 @@ from typing import Any, TypedDict
 from langgraph.graph import StateGraph, END
 
 from luminamind.deep_agent import get_llm
+from luminamind.evaluator.live_verifier import LiveVerifier, VerificationConfig, LiveVerificationReport
 
 
 @dataclass
@@ -72,10 +73,12 @@ class EvaluatorAgent:
         model: Any | None = None,
         grading_criteria: Any | None = None,
         max_iterations: int = 5,
+        live_verifier: LiveVerifier | None = None,
     ):
         self.model = model or get_llm()
         self.grading_criteria = grading_criteria
         self.max_iterations = max_iterations
+        self.live_verifier = live_verifier
         self.graph = self._build_graph()
 
     def _build_graph(self) -> StateGraph:
@@ -290,6 +293,25 @@ class EvaluatorAgent:
             feedback_lines.append(f"  {i}. {issue}")
 
         return "\n".join(feedback_lines)
+
+    async def verify_live(self, artifact: Any, context: dict | None = None) -> LiveVerificationReport:
+        """Run live verification on artifact.
+
+        Args:
+            artifact: The artifact to verify (code, UI, API, etc.)
+            context: Optional context for verification
+
+        Returns:
+            LiveVerificationReport with verification results
+        """
+        if self.live_verifier is None:
+            raise RuntimeError("LiveVerifier not configured")
+
+        return await self.live_verifier.verify()
+
+    def get_live_verifier(self) -> LiveVerifier | None:
+        """Get the live verifier instance."""
+        return self.live_verifier
 
     def critique(self, artifact: Any, context: dict | None = None) -> str:
         """Generate a text critique of the artifact.

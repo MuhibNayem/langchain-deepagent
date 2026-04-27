@@ -5,13 +5,13 @@ milestone_name: milestone
 current_phase: 02 — Generator-Evaluator Architecture
 status: in_progress
 stopped_at: Completed 02-07-PLAN.md (RefinementPipeline)
-last_updated: "2026-04-27T13:50:00Z"
+last_updated: "2026-04-27T08:01:29.001Z"
 progress:
-  total_phases: 7
+  total_phases: 2
   completed_phases: 2
   total_plans: 12
-  completed_plans: 10
-  percent: 83
+  completed_plans: 12
+  percent: 100
 ---
 
 # State
@@ -27,9 +27,9 @@ progress:
 - **Total Phases:** 7
 - **Completed Phases:** 2 (Phase 01, Phase 02 plans 01-07)
 - **Current Phase:** Phase 02 — Generator-Evaluator Architecture
-- **Current Phase Progress:** 7/12 plans
+- **Current Phase Progress:** 8/12 plans
 - **Plans Total:** 12
-- **Plans Complete:** 10
+- **Plans Complete:** 11
 
 ## Phase History
 
@@ -42,6 +42,7 @@ progress:
   - 02-05: IterationController for gen-eval loop control — COMPLETED (commits: 1458466, 45f4839)
   - 02-06: FeedbackBridge for generator-evaluator communication — COMPLETED (commits: 11317f2, c3849ca)
   - 02-07: RefinementPipeline orchestrator — COMPLETED (commits: 5ba8c60, 164c3fc)
+  - 02-08: CriteriaEngine for domain-specific criteria management — COMPLETED (commits: a8155f3, 2a75c63)
 
 ## Milestone
 
@@ -62,7 +63,7 @@ progress:
 ## Last Session
 
 - **Timestamp:** 2026-04-27T13:50:00Z
-- **Stopped At:** Completed 02-07-PLAN.md (RefinementPipeline)
+- **Stopped At:** Completed 02-08-PLAN.md (CriteriaEngine)
 - **Resume File:** None — plan fully completed
 
 ## Decisions Made
@@ -80,3 +81,5 @@ progress:
 - RefinementPipeline orchestrates generator-evaluator loop with quality gate
 - Quality gate is hard requirement - score must meet threshold to pass
 - RefinementResult and RoundResult dataclasses for structured pipeline output
+- CriteriaEngine uses registry pattern for domain criteria management
+- Default weights: design=0.30, code=0.35, craft=0.15, originality=0.20

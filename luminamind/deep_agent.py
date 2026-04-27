@@ -155,6 +155,8 @@ def get_llm():
         model="glm-4.5-flash",
         openai_api_key=api_key,
         openai_api_base=api_base,
+        # Prevent automatic retries at the LLM layer; we only retry tools.
+        max_retries=30,
         streaming=True,
     )
 

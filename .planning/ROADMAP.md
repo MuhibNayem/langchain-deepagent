@@ -15,7 +15,7 @@
 1. Working memory reduces token waste by 40% (benchmarked)
 2. Session resumption works across restarts
 3. Prompt prefix caching active on stable content
-4. Context compaction maintains quality under max-token budget
+4. Context compaction maintains quality under max-token budget with recent-biased compression
 
 **Plans:**
 - [ ] 01-01: Two-layer memory architecture (SessionMemory, FullTranscript, WorkingMemory)
@@ -159,12 +159,6 @@
 ## Backlog
 
 (Deferred items will appear here)
-
----
-
-## Dependencies Map
-
-```
 PHASE 1 (Context & Memory)
 ├── 1.1 Structured Session Memory ──┐
 ├── 1.2 Prompt Prefix Caching ───────┤

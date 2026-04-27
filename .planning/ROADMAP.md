@@ -636,9 +636,9 @@ volumes:
 | 06 | Production Hardening | 6 | Planned |
 | 07 | Integration & Testing | 4 | Planned |
 | 08 | Agent Swarm & Scheduled Automation | 8 | Planned |
-| 09 | Self-Evolving & Futuristic | 9 | Planned |
+| 09 | Self-Evolving & Futuristic | 10 | Planned |
 
-**Grand Total: 9 phases, 65 plans, 480+ subtasks**
+**Grand Total: 9 phases, 66 plans, 490+ subtasks**
 
 ---
 
@@ -1083,6 +1083,142 @@ presets:
 └─────────────────────────────────────────────────────────────┘
 ```
 
+---
+
+### Phase 9.10 — Agent Customization System
+
+**Goal:** Allow users to fully customize each agent role's behavior: system prompts, evaluation criteria, tool access, output formats, and LLM parameters
+
+**Subtasks:**
+- [ ] 09-10-01: Agent config schema (AgentConfig per role: prompt, criteria, tools, params)
+- [ ] 09-10-02: File-based prompt storage (`~/.luminamind/prompts/planner.md`, `evaluator.md`, etc.)
+- [ ] 09-10-03: CLI prompt editor (`luminamind config prompt --role planner --edit`)
+- [ ] 09-10-04: Criteria editor per role (`luminamind config criteria --role evaluator --list`)
+- [ ] 09-10-05: Tool access control per role (which tools each role can invoke)
+- [ ] 09-10-06: LLM parameter overrides (temperature, max_tokens, stop sequences per role)
+- [ ] 09-10-07: Role limit configuration (max_iterations, timeout_seconds, retry_count)
+- [ ] 09-10-08: Interactive config wizard (`luminamind config setup --role planner`)
+- [ ] 09-10-09: Config validation on load (verify prompts parse, criteria are valid YAML)
+- [ ] 09-10-10: Import/export agent configs (`luminamind config export --role planner`, `--import`)
+
+**Files:**
+- `luminamind/config/agent_config.py` — AgentConfig, RoleConfig, ConfigSchema
+- `luminamind/config/prompts.py` — PromptLoader, PromptStorage
+- `luminamind/config/criteria.py` — CriteriaLoader, CriteriaValidator
+- `luminamind/config/tool_access.py` — ToolAccessControl, RoleToolPermissions
+- `luminamind/config/limits.py` — RoleLimits, LimitConfig
+- `luminamind/cli/config.py` — CLI group: `luminamind config prompt`, `luminamind config criteria`
+- `luminamind/config/wizard.py` — InteractiveConfigWizard
+- `luminamind/config/export.py` — ConfigExport, ConfigImport
+- `tests/unit/test_agent_config.py` — Unit tests
+- `tests/integration/test_custom_roles.py` — Integration tests
+
+**Directory Structure:**
+```
+~/.luminamind/
+├── prompts/                 # User-editable system prompts
+│   ├── planner.md          # "You are a planner agent..."
+│   ├── executor.md         # "You are a code executor..."
+│   ├── evaluator.md        # "You are an evaluator..."
+│   ├── critic.md           # "You are a quick critic..."
+│   └── orchestrator.md     # "You coordinate agents..."
+├── criteria/               # Evaluation criteria per role
+│   ├── evaluator.yaml      # YAML criteria for evaluator
+│   └── planner.yaml        # YAML criteria for planner
+├── tools/                  # Tool access per role
+│   ├── planner.json        # ["web_search", "read_file"]
+│   ├── executor.json       # ["shell", "write_file", "grep"]
+│   └── evaluator.json      # ["playwright", "api_test"]
+└── limits/
+    ├── planner.yaml        # max_iterations: 10, timeout: 300
+    └── executor.yaml        # max_iterations: 20, timeout: 600
+```
+
+**CLI Commands:**
+```bash
+# Edit prompts
+luminamind config prompt --role planner --edit
+luminamind config prompt --role planner --view
+luminamind config prompt --role planner --reset
+
+# Edit criteria
+luminamind config criteria --role evaluator --list
+luminamind config criteria --role evaluator --add "No SQL injection vulnerabilities"
+luminamind config criteria --role evaluator --remove "Outdated dependencies"
+luminamind config criteria --role evaluator --edit
+
+# Tool access
+luminamind config tools --role planner --list
+luminamind config tools --role executor --add shell
+luminamind config tools --role executor --remove dangerous_commands
+
+# LLM parameters
+luminamind config params --role planner --set temperature=0.7 max_tokens=4000
+luminamind config params --role planner --view
+
+# Role limits
+luminamind config limits --role planner --set max_iterations=10 timeout=300
+luminamind config limits --role executor --set max_iterations=20 timeout=600
+
+# Interactive wizard
+luminamind config setup              # Setup all roles
+luminamind config setup --role planner  # Setup specific role
+
+# Export/Import
+luminamind config export --role planner --file my-planner.yaml
+luminamind config import --file my-planner.yaml
+```
+
+**Example Custom Configs:**
+```yaml
+# ~/.luminamind/prompts/planner.md
+You are a security-first architect AI.
+When given a task:
+1. Identify potential security vulnerabilities first
+2. Consider data privacy implications
+3. Prefer mature, well-audited libraries over cutting-edge ones
+4. Always document security assumptions
+Your output should be structured as:
+- Security considerations (critical)
+- Architecture overview
+- Implementation notes
+- Potential risks
+```
+
+```yaml
+# ~/.luminamind/criteria/evaluator.yaml
+critical:
+  - name: SQL Injection
+    description: No unparameterized SQL queries
+    severity: critical
+  - name: Authentication
+    description: All endpoints require auth unless explicitly public
+    severity: critical
+  - name: Hardcoded Secrets
+    description: No API keys, passwords, or tokens in code
+    severity: critical
+
+high:
+  - name: Input Validation
+    description: All user inputs validated and sanitized
+    severity: high
+  - name: Error Handling
+    description: Errors don't leak stack traces
+    severity: high
+```
+
+```json
+# ~/.luminamind/tools/executor.json
+{
+  "allowed": ["shell", "read_file", "write_file", "grep", "patch"],
+  "denied": ["format_disk", "delete_system"],
+  "rate_limit": {
+    "shell": {"max_per_minute": 30},
+    "write_file": {"max_per_minute": 100}
+  }
+}
+```
+
 ## Phase 9 Summary
 
 | Plan | Focus | Subtasks | Dependencies |
@@ -1096,8 +1232,9 @@ presets:
 | 09-07 | Model Cost Arbitrage | 10 | Phase 8 (API) |
 | 09-08 | Plugin & Extension System | 10 | Phase 7 (integration), Phase 9-03 |
 | 09-09 | Per-Role Model Selection | 14 | Phase 9-07 (model registry) |
+| 09-10 | Agent Customization System | 10 | Phase 9-09 (model selection) |
 
-**Total Phase 9:** 9 plans, 78 subtasks
+**Total Phase 9:** 10 plans, 88 subtasks
 
 ---
 

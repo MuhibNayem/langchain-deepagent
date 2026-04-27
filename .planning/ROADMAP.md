@@ -62,14 +62,14 @@
 4. Multi-agent coordination handles message queuing and conflict resolution
 
 **Plans:**
-- [ ] 03-01: Planner agent (spec expansion, feature decomposition, AI suggestion integration)
-- [ ] 03-02: Spec generation (structured output, user stories, acceptance criteria)
-- [ ] 03-03: Planner-evaluator integration (spec review loop)
-- [ ] 03-04: Sprint contract framework (negotiation protocol, persistence)
-- [ ] 03-05: Contract verification (criterion-by-criterion checking)
-- [ ] 03-06: Sprint lifecycle manager (planning → execution → verification → handoff)
-- [ ] 03-07: Bounded subagent system (context inheritance, recursion depth limiting)
-- [ ] 03-08: Subagent communication layer (AgentMessageBus, output merging)
+- [x] 03-01: Planner agent (spec expansion, feature decomposition, AI suggestion integration)
+- [x] 03-02: Spec generation (structured output, user stories, acceptance criteria)
+- [x] 03-03: Planner-evaluator integration (spec review loop)
+- [x] 03-04: Sprint contract framework (negotiation protocol, persistence)
+- [x] 03-05: Contract verification (criterion-by-criterion checking)
+- [x] 03-06: Sprint lifecycle manager (planning → execution → verification → handoff)
+- [x] 03-07: Bounded subagent system (context inheritance, recursion depth limiting)
+- [x] 03-08: Subagent communication layer (AgentMessageBus, output merging)
 
 ---
 

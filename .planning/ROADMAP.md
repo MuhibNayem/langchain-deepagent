@@ -171,9 +171,19 @@
 6. Monitoring dashboard shows swarm health, task status, resource usage
 7. Alert system notifies on task failure, convergence issues, resource exhaustion
 
+**Plans:**
+- [ ] 08-01: Task Queue & Persistence — `.planning/phases/08-agent-swarm-automation/08-01-PLAN.md`
+- [ ] 08-02: Scheduler & Cron — `.planning/phases/08-agent-swarm-automation/08-02-PLAN.md`
+- [ ] 08-03: Agent Swarm Orchestration — `.planning/phases/08-agent-swarm-automation/08-03-PLAN.md`
+- [ ] 08-04: Background Workers — `.planning/phases/08-agent-swarm-automation/08-04-PLAN.md`
+- [ ] 08-05: Monitoring & Alerting — `.planning/phases/08-agent-swarm-automation/08-05-PLAN.md`
+- [ ] 08-06: API & CLI — `.planning/phases/08-agent-swarm-automation/08-06-PLAN.md`
+- [ ] 08-07: Enterprise Features — `.planning/phases/08-agent-swarm-automation/08-07-PLAN.md`
+- [ ] 08-08: Installation & Distribution — `.planning/phases/08-agent-swarm-automation/08-08-PLAN.md`
+
 ---
 
-### Phase 8.1 — Task Queue & Persistence
+## Phase 8.1 — Task Queue & Persistence
 
 **Goal:** Persistent task queue with retry logic, priority handling, and dead-letter queue
 

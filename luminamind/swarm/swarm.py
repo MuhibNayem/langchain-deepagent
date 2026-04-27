@@ -3,6 +3,7 @@ from datetime import datetime
 from typing import Any, Optional
 import uuid
 import threading
+import time
 
 from .roles import AgentRole, RoleRegistry
 
@@ -44,11 +45,19 @@ class SwarmMessage:
 
 
 class Swarm:
-    def __init__(self, config: SwarmConfig = None):
+    def __init__(self, config: SwarmConfig = None, message_bus=None):
+        """Initialize Swarm with optional message_bus for inter-agent communication.
+
+        Args:
+            config: SwarmConfig instance for swarm behavior settings
+            message_bus: Optional AgentMessageBus instance for message dispatch.
+                        If None, uses internal queue for standalone operation.
+        """
         self.config = config or SwarmConfig()
         self._agents: dict[str, AgentInfo] = {}
         self._roles = RoleRegistry()
         self._lock = threading.Lock()
+        self._message_bus = message_bus
         self._message_queue: list[SwarmMessage] = []
 
     def spawn(self, role: AgentRole, config: dict = None) -> str:
@@ -94,7 +103,10 @@ class Swarm:
             if not self._validate_sender(message.sender_id):
                 raise ValueError(f"Invalid sender_id: {message.sender_id}")
             message.recipient_id = None
-            self._message_queue.append(message)
+            if self._message_bus is not None:
+                self._message_bus.publish(message)
+            else:
+                self._message_queue.append(message)
 
     def send_to(self, agent_id: str, message: SwarmMessage) -> None:
         """Send direct message to specific agent."""
@@ -104,7 +116,10 @@ class Swarm:
             if agent_id not in self._agents or self._agents[agent_id].status == "dead":
                 raise ValueError(f"Invalid recipient_id: {agent_id}")
             message.recipient_id = agent_id
-            self._message_queue.append(message)
+            if self._message_bus is not None:
+                self._message_bus.publish(message)
+            else:
+                self._message_queue.append(message)
 
     def get_status(self) -> SwarmStatus:
         """Get swarm status."""
@@ -125,5 +140,5 @@ class Swarm:
             status = self.get_status()
             if status.active_agents == 0:
                 return {"status": "complete", "agents": len(self._agents)}
-            threading.sleep(1)
+            time.sleep(1)
         return {"status": "timeout", "active": status.active_agents}

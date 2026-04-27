@@ -29,7 +29,7 @@ class Scheduler:
         self.task_queue = task_queue
         self.state_file = state_file
         self._tasks: dict[str, ScheduledTask] = {}
-        self._lock = threading.Lock()
+        self._lock = threading.RLock()
         self._tick_thread: Optional[threading.Thread] = None
         self._stop_event = threading.Event()
 

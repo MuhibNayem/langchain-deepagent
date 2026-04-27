@@ -42,7 +42,15 @@ aiofiles = "^25.1.0"
 [tool.poetry.group.dev.dependencies]
 pytest = "^9.0.1"
 pillow = "^12.2.0"
+aiofiles = "^25.1.0"
 pytest-asyncio = "^1.3.0"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
 
 [build-system]
 requires = ["poetry-core"]

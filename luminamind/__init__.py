@@ -27,7 +27,7 @@ Component Inventory (Phase 1-6):
   from luminamind.observability import HarnessMetrics
 """
 
-from deepagents import create_deep_agent
+from luminamind.deep_agent import DeepAgent, create_deep_agent
 
 from luminamind.config.env import load_project_env, validate_env
 from luminamind.config.checkpointer import create_checkpointer, CheckpointConfig
@@ -48,6 +48,7 @@ __version__ = "1.0.0"
 
 __all__ = [
     # Core
+    "DeepAgent",
     "create_deep_agent",
     # Config
     "load_project_env",

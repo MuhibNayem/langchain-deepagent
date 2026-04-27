@@ -837,5 +837,164 @@ def demo_all() -> None:
         console.print("\n[red]✗ Some demos failed. Check output for details.[/red]")
 
 
+# Benchmark CLI subcommand
+benchmark_cli = typer.Typer(help="Benchmark harness for LuminaMind agent evaluation")
+cli.add_typer(benchmark_cli, name="benchmark", invoke_without_command=True)
+
+
+@benchmark_cli.command("run")
+def benchmark_run(
+    cases: int = typer.Option(10, help="Number of random cases to run"),
+    category: str = typer.Option(None, help="Category to run (e.g., CODE_GEN)"),
+    output_dir: str = typer.Option(None, help="Output directory for results"),
+) -> None:
+    """Run benchmark test cases."""
+    from luminamind.benchmark import TestSuite, BenchmarkRunner, run_benchmark
+    from luminamind.benchmark.test_suite import TaskCategory
+
+    console.print(Panel.fit(
+        f"[bold cyan]Running Benchmark[/]\n[dim]{cases} test cases[/]",
+        border_style="cyan"
+    ))
+
+    try:
+        suite = TestSuite()
+        runner = BenchmarkRunner(max_parallel=4)
+
+        if category:
+            cat = TaskCategory[category.upper()]
+            results = runner.run_category(cat)
+        else:
+            results = runner.run_sample(cases)
+
+        console.print(f"\n[green]✓ Completed {results.total_cases} test cases[/green]")
+        console.print(f"  Passed: {results.passed} ({results.passed / results.total_cases * 100:.1f}%)" if results.total_cases > 0 else "  Passed: 0")
+        console.print(f"  Average score: {sum(r.score for r in results.scores) / len(results.scores):.2%}" if results.scores else "  Average score: N/A")
+
+        if output_dir:
+            from pathlib import Path
+            runner._save_results(results, Path(output_dir))
+            console.print(f"  Results saved to: {output_dir}")
+
+    except Exception as e:
+        console.print(f"[red]Benchmark failed: {e}[/red]")
+        raise typer.Exit(code=1)
+
+
+@benchmark_cli.command("list")
+def benchmark_list() -> None:
+    """List all available benchmark test cases."""
+    from luminamind.benchmark import TestSuite
+
+    suite = TestSuite()
+    console.print(Panel.fit(
+        f"[bold cyan]Benchmark Test Suite[/]\n[dim]{len(suite.cases)} test cases[/]",
+        border_style="cyan"
+    ))
+
+    from luminamind.benchmark.test_suite import TaskCategory
+    cats: dict[str, int] = {}
+    for c in suite.cases:
+        cat = c.category.value if isinstance(c.category, TaskCategory) else str(c.category)
+        cats[cat] = cats.get(cat, 0) + 1
+
+    table = Table(title="Test Cases by Category")
+    table.add_column("Category", style="cyan")
+    table.add_column("Count", style="magenta", justify="right")
+
+    for cat, count in sorted(cats.items()):
+        table.add_row(cat, str(count))
+
+    console.print(table)
+
+
+@benchmark_cli.command("baseline")
+def benchmark_baseline(
+    update: bool = typer.Option(False, help="Update baseline with current scores"),
+) -> None:
+    """Manage benchmark baseline for regression detection."""
+    from luminamind.benchmark import TestSuite, BenchmarkRunner
+    from luminamind.benchmark.regression import RegressionDetector
+
+    if update:
+        console.print("[yellow]Running benchmark to update baseline...[/yellow]")
+        suite = TestSuite()
+        runner = BenchmarkRunner(max_parallel=4)
+        results = runner.run_sample(20)
+
+        from luminamind.benchmark.scoring import Scorer
+        scorer = Scorer()
+        scores = scorer.score_results(results)
+
+        detector = RegressionDetector()
+        detector.update_baseline(scores)
+
+        console.print("[green]✓ Baseline updated successfully![/green]")
+    else:
+        detector = RegressionDetector()
+        baseline_path = detector.baseline_path
+        if baseline_path.exists():
+            console.print(f"[cyan]Baseline location:[/cyan] {baseline_path}")
+            import json
+            with open(baseline_path) as f:
+                data = json.load(f)
+            console.print(f"  Overall average: {data.get('overall_average', 0):.2%}")
+            console.print(f"  Total tests: {data.get('total_tests', 0)}")
+        else:
+            console.print("[yellow]No baseline found. Run with --update to create one.[/yellow]")
+
+
+@benchmark_cli.command("regress")
+def benchmark_regress() -> None:
+    """Check for regressions against baseline."""
+    from luminamind.benchmark import TestSuite, BenchmarkRunner
+    from luminamind.benchmark.regression import RegressionDetector
+    from luminamind.benchmark.scoring import Scorer
+
+    console.print("[yellow]Running benchmark for regression check...[/yellow]")
+
+    suite = TestSuite()
+    runner = BenchmarkRunner(max_parallel=4)
+    results = runner.run_sample(20)
+
+    scorer = Scorer()
+    scores = scorer.score_results(results)
+
+    detector = RegressionDetector()
+    report = detector.check_regression(scores)
+
+    if report.has_regression:
+        console.print(Panel.fit(
+            f"[bold red]REGRESSION DETECTED[/]\n[dim]{report.summary}[/dim]",
+            border_style="red"
+        ))
+        for r in report.regressions:
+            console.print(f"  [red]{r.severity}:[/red] {r.category} ({r.delta:+.2%})")
+    else:
+        console.print(Panel.fit(
+            f"[bold green]NO REGRESSION[/]\n[dim]{report.summary}[/dim]",
+            border_style="green"
+        ))
+
+
+@benchmark_cli.command("report")
+def benchmark_report(
+    format: str = typer.Option("markdown", help="Report format (markdown or text)"),
+) -> None:
+    """Generate benchmark report from last results."""
+    from luminamind.benchmark import TestSuite
+    from luminamind.benchmark.scoring import Scorer
+
+    suite = TestSuite()
+    runner = BenchmarkRunner(max_parallel=4)
+    results = runner.run_sample(5)
+
+    scorer = Scorer()
+    scores = scorer.score_results(results)
+    report = scorer.generate_report(results, scores, format=format)
+
+    console.print(report)
+
+
 if __name__ == "__main__":
     cli()

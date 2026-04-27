@@ -118,7 +118,7 @@ class BoundedSubagent:
         )
 
         # Import here to avoid circular dependency
-        from luminamind.deep_agent import get_llm, create_deep_agent
+        from luminamind.llm import get_llm
 
         # Create agent
         self.model = get_llm()

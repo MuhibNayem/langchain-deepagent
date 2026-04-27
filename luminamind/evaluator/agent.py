@@ -10,7 +10,7 @@ from typing import Any, TypedDict
 
 from langgraph.graph import StateGraph, END
 
-from luminamind.deep_agent import get_llm
+from luminamind.llm import get_llm
 from luminamind.evaluator.live_verifier import LiveVerifier, VerificationConfig, LiveVerificationReport
 
 

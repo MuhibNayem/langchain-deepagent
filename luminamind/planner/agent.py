@@ -9,7 +9,7 @@ import re
 from dataclasses import dataclass, field
 
 from luminamind.planner.spec import SpecDocument, UserStory, AcceptanceCriterion
-from luminamind.deep_agent import get_llm
+from luminamind.llm import get_llm
 
 
 @dataclass

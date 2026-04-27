@@ -2,7 +2,8 @@
 from typing import Dict, Any, Optional
 import asyncio
 
-from luminamind.sandbox.sandbox import Sandbox, SandboxConfig, SandboxBackend, SandboxStatus
+from luminamind.sandbox.sandbox import SandboxConfig, SandboxBackend, SandboxStatus
+from luminamind.sandbox.docker_backend import DockerBackend
 from luminamind.sandbox.limits import ResourceLimits, ContainerResources
 
 
@@ -29,7 +30,7 @@ class PluginSandbox:
             limits=ResourceLimits(time_limit_seconds=timeout),
         )
 
-        async with Sandbox(config) as sandbox:
+        async with DockerBackend(config) as sandbox:
             result = await sandbox.execute(plugin_code, language="python")
 
             return {

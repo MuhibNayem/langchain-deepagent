@@ -37,6 +37,9 @@ prometheus-client = "^0.21.1"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^9.0.1"
+pillow = "^12.2.0"
+aiofiles = "^25.1.0"
+pytest-asyncio = "^1.3.0"
 
 [build-system]
 requires = ["poetry-core"]

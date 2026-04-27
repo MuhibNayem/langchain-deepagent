@@ -1281,11 +1281,11 @@ After Phase 9, LuminaMind becomes:
 8. wait_for_completion() uses time.sleep not threading.sleep
 
 **Plans:**
-- [ ] 10-01: Fix Swarm execution loop — `.planning/phases/10-bugfix-swarm-scheduler/10-01-PLAN.md`
-- [ ] 10-02: Fix Scheduler persistence deadlock — `.planning/phases/10-bugfix-swarm-scheduler/10-02-PLAN.md`
-- [ ] 10-03: Fix BoundedSubagent import bug — `.planning/phases/10-bugfix-swarm-scheduler/10-03-PLAN.md`
-- [ ] 10-04: Integrate Swarm with agent_message_bus — `.planning/phases/10-bugfix-swarm-scheduler/10-04-PLAN.md`
-- [ ] 10-05: Fix CLI imports and get_status accuracy — `.planning/phases/10-bugfix-swarm-scheduler/10-05-PLAN.md`
+- [x] 10-01: Fix Swarm execution loop — `.planning/phases/10-bugfix-swarm-scheduler/10-01-PLAN.md`
+- [x] 10-02: Fix Scheduler persistence deadlock — `.planning/phases/10-bugfix-swarm-scheduler/10-02-PLAN.md`
+- [x] 10-03: Fix BoundedSubagent import bug — `.planning/phases/10-bugfix-swarm-scheduler/10-03-PLAN.md`
+- [x] 10-04: Integrate Swarm with agent_message_bus — `.planning/phases/10-bugfix-swarm-scheduler/10-04-PLAN.md`
+- [x] 10-05: Fix CLI imports and get_status accuracy — `.planning/phases/10-bugfix-swarm-scheduler/10-05-PLAN.md`
 
 ---
 

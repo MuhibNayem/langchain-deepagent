@@ -1311,7 +1311,7 @@ After Phase 9, LuminaMind becomes:
 13. API events router is registered
 
 **Plans:**
-- [ ] 11-01: Refinement pipeline datetime import — `.planning/phases/11-bugfix-round-2/11-01-PLAN.md`
+- [x] 11-01: Refinement pipeline datetime import — `.planning/phases/11-bugfix-round-2/11-01-PLAN.md`
 - [ ] 11-02: Visual regression detector Pillow API — `.planning/phases/11-bugfix-round-2/11-02-PLAN.md`
 - [ ] 11-03: Package test collection (missing deps) — `.planning/phases/11-bugfix-round-2/11-03-PLAN.md`
 - [ ] 11-04: Runtime dependency consistency (aiofiles, etc.) — `.planning/phases/11-bugfix-round-2/11-04-PLAN.md`

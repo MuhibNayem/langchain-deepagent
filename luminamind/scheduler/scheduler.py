@@ -141,7 +141,7 @@ class Scheduler:
             self._stop_event.wait(1)  # Tick every second
 
     def _persist(self):
-        """Save state to disk."""
+        """Save state to disk using atomic write (temp file + rename)."""
         if not self.state_file:
             return
 
@@ -163,8 +163,13 @@ class Scheduler:
                 for task_id, t in self._tasks.items()
             }
 
-        with open(self.state_file, "w") as f:
+        # Atomic write: write to temp file then rename
+        import tempfile
+        temp_path = self.state_file + ".tmp"
+        with open(temp_path, "w") as f:
             json.dump(data, f, indent=2)
+        import os
+        os.rename(temp_path, self.state_file)
 
     def _load(self):
         """Load state from disk."""

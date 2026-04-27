@@ -112,3 +112,124 @@ def with_retry(
             return sync_wrapper
 
     return decorator
+
+
+class CircuitState(str, Enum):
+    CLOSED = "closed"      # Normal operation
+    OPEN = "open"          # Failing, reject calls
+    HALF_OPEN = "half_open"  # Testing recovery
+
+
+class CircuitBreakerOpen(Exception):
+    """Raised when circuit breaker is OPEN."""
+    def __init__(self, name: str, reset_time: float):
+        self.name = name
+        self.reset_time = reset_time
+        super().__init__(f"Circuit breaker '{name}' is OPEN until {reset_time}")
+
+
+class CircuitBreaker:
+    """Circuit breaker pattern implementation."""
+
+    def __init__(
+        self,
+        name: str,
+        failure_threshold: int = 5,
+        recovery_timeout: float = 60.0,
+        half_open_max_calls: int = 3,
+    ):
+        self.name = name
+        self.failure_threshold = failure_threshold
+        self.recovery_timeout = recovery_timeout
+        self.half_open_max_calls = half_open_max_calls
+
+        self._state = CircuitState.CLOSED
+        self._failure_count = 0
+        self._last_failure_time: float | None = None
+        self._half_open_calls = 0
+
+    @property
+    def state(self) -> CircuitState:
+        """Get current state, checking for timeout transitions."""
+        if self._state == CircuitState.OPEN:
+            if self._last_failure_time is not None:
+                if time.time() - self._last_failure_time >= self.recovery_timeout:
+                    self._state = CircuitState.HALF_OPEN
+                    self._half_open_calls = 0
+        return self._state
+
+    def record_success(self) -> None:
+        """Record a successful call."""
+        if self._state == CircuitState.HALF_OPEN:
+            self._half_open_calls += 1
+            if self._half_open_calls >= self.half_open_max_calls:
+                self._state = CircuitState.CLOSED
+                self._failure_count = 0
+        elif self._state == CircuitState.CLOSED:
+            self._failure_count = 0
+
+    def record_failure(self) -> None:
+        """Record a failed call."""
+        self._failure_count += 1
+        self._last_failure_time = time.time()
+
+        if self._state == CircuitState.HALF_OPEN:
+            self._state = CircuitState.OPEN
+        elif self._state == CircuitState.CLOSED:
+            if self._failure_count >= self.failure_threshold:
+                self._state = CircuitState.OPEN
+
+    def can_execute(self) -> bool:
+        """Check if execution is allowed."""
+        return self.state != CircuitState.OPEN
+
+    def get_reset_time(self) -> float | None:
+        """Get time when circuit will attempt recovery."""
+        if self._state == CircuitState.OPEN and self._last_failure_time:
+            return self._last_failure_time + self.recovery_timeout
+        return None
+
+
+def circuit_breaker(
+    cb: CircuitBreaker,
+    exceptions: tuple[type[Exception], ...] = (Exception,),
+) -> Callable[[Callable[..., T]], Callable[..., T]]:
+    """Decorator to add circuit breaker to a function.
+
+    Args:
+        cb: CircuitBreaker instance
+        exceptions: Tuple of exception types that count as failures
+    """
+    def decorator(func: Callable[..., T]) -> Callable[..., T]:
+        if asyncio.iscoroutinefunction(func):
+            @wraps(func)
+            async def async_wrapper(*args, **kwargs) -> T:
+                if not cb.can_execute():
+                    raise CircuitBreakerOpen(cb.name, cb.get_reset_time() or 0)
+
+                try:
+                    result = await func(*args, **kwargs)
+                    cb.record_success()
+                    return result
+                except exceptions as e:
+                    cb.record_failure()
+                    raise
+
+            return async_wrapper
+        else:
+            @wraps(func)
+            def sync_wrapper(*args, **kwargs) -> T:
+                if not cb.can_execute():
+                    raise CircuitBreakerOpen(cb.name, cb.get_reset_time() or 0)
+
+                try:
+                    result = func(*args, **kwargs)
+                    cb.record_success()
+                    return result
+                except exceptions as e:
+                    cb.record_failure()
+                    raise
+
+            return sync_wrapper
+
+    return decorator

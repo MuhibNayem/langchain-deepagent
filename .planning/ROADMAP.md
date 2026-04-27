@@ -86,11 +86,11 @@
 4. Database state verification confirms expected state assertions
 
 **Plans:**
-- [ ] 04-01: Playwright MCP bridge (browser automation, screenshot capture, user flow simulation)
-- [ ] 04-02: Visual regression detection (screenshot comparison, layout change detection)
-- [ ] 04-03: API testing integration (endpoint discovery, request/response logging)
-- [ ] 04-04: Database state verifier (schema introspection, state query, expected assertions)
-- [ ] 04-05: Evaluator integration (connect DB verifier to evaluator agent)
+- [x] 04-01: Playwright MCP bridge (browser automation, screenshot capture, user flow simulation) — `.planning/phases/04-live-verification/04-01-PLAN.md`
+- [x] 04-02: Visual regression detection (screenshot comparison, layout change detection) — `.planning/phases/04-live-verification/04-02-PLAN.md`
+- [x] 04-03: API testing integration (endpoint discovery, request/response logging) — `.planning/phases/04-live-verification/04-03-PLAN.md`
+- [x] 04-04: Database state verifier (schema introspection, state query, expected assertions) — `.planning/phases/04-live-verification/04-04-PLAN.md`
+- [x] 04-05: Evaluator integration (connect DB verifier to evaluator agent) — `.planning/phases/04-live-verification/04-05-PLAN.md`
 
 ---
 

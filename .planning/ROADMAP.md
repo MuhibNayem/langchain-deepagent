@@ -38,14 +38,14 @@
 4. Sandbox environment for isolated evaluation
 
 **Plans:**
-- [ ] 02-01: Evaluator agent system (EvaluatorAgent, grading criteria framework)
-- [ ] 02-02: Frontend design evaluator (visual quality scoring, actionable critique)
-- [ ] 02-03: Code quality evaluator (correctness, maintainability, performance, security)
-- [ ] 02-04: Evaluator sandbox (Playwright MCP, API testing, DB state verification)
-- [ ] 02-05: Iteration controller (max-iteration limits, convergence detection)
-- [ ] 02-06: Feedback bridge (generator-evaluator communication)
-- [ ] 02-07: Multi-round refinement pipeline (quality gate enforcement)
-- [ ] 02-08: Grading criteria engine (domain-specific criteria sets)
+- [x] 02-01: Evaluator agent system (EvaluatorAgent, grading criteria framework)
+- [x] 02-02: Frontend design evaluator (visual quality scoring, actionable critique)
+- [x] 02-03: Code quality evaluator (correctness, maintainability, performance, security)
+- [x] 02-04: Evaluator sandbox (Playwright MCP, API testing, DB state verification)
+- [x] 02-05: Iteration controller (max-iteration limits, convergence detection)
+- [x] 02-06: Feedback bridge (generator-evaluator communication)
+- [x] 02-07: Multi-round refinement pipeline (quality gate enforcement)
+- [x] 02-08: Grading criteria engine (domain-specific criteria sets)
 
 ---
 

@@ -69,15 +69,13 @@ class TaskPool:
         task.started_at = datetime.now()
 
         try:
+            # Use executor's built-in timeout instead of signal.alarm (UNIX-only)
+            # signal.alarm is not available on Windows and causes issues in threads
             if task.timeout:
-                import signal
-                # Set timeout alarm
-                signal.alarm(int(task.timeout))
-
-            result = task.func(*task.args, **task.kwargs)
-
-            if task.timeout:
-                signal.alarm(0)  # Cancel alarm
+                future = self._executor.submit(task.func, *task.args, **task.kwargs)
+                result = future.result(timeout=task.timeout)
+            else:
+                result = task.func(*task.args, **task.kwargs)
 
             task.status = TaskStatus.COMPLETED
             task.result = result
@@ -87,6 +85,17 @@ class TaskPool:
                 task_id=task.task_id,
                 success=True,
                 result=result,
+                execution_time=(datetime.now() - task.started_at).total_seconds()
+            )
+        except concurrent.futures.TimeoutError:
+            task.status = TaskStatus.FAILED
+            task.error = f"Task timed out after {task.timeout} seconds"
+            task.completed_at = datetime.now()
+
+            return TaskResult(
+                task_id=task.task_id,
+                success=False,
+                error=f"Task timed out after {task.timeout} seconds",
                 execution_time=(datetime.now() - task.started_at).total_seconds()
             )
         except Exception as e:

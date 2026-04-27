@@ -14,6 +14,10 @@ from luminamind.safety.code_sandbox import (
     SandboxConfig,
     SandboxResult,
 )
+from luminamind.safety.output_validator import (
+    OutputValidator,
+    ValidationResult,
+)
 
 __all__ = [
     "CircuitBreaker",
@@ -23,4 +27,6 @@ __all__ = [
     "CodeSandbox",
     "SandboxConfig",
     "SandboxResult",
+    "OutputValidator",
+    "ValidationResult",
 ]

@@ -4,14 +4,14 @@ milestone: v1.0
 milestone_name: milestone
 current_phase: 02 — Generator-Evaluator Architecture
 status: in_progress
-stopped_at: Completed 02-06-PLAN.md (FeedbackBridge)
-last_updated: "2026-04-27T07:47:30Z"
+stopped_at: Completed 02-05-PLAN.md (IterationController)
+last_updated: "2026-04-27T08:15:00Z"
 progress:
-  total_phases: 2
-  completed_phases: 1
+  total_phases: 7
+  completed_phases: 2
   total_plans: 12
-  completed_plans: 10
-  percent: 83
+  completed_plans: 9
+  percent: 75
 ---
 
 # State
@@ -25,11 +25,11 @@ progress:
 ## Progress
 
 - **Total Phases:** 7
-- **Completed Phases:** 2 (Phase 01, Phase 02 plans 01-06)
+- **Completed Phases:** 2 (Phase 01, Phase 02 plans 01-05)
 - **Current Phase:** Phase 02 — Generator-Evaluator Architecture
-- **Current Phase Progress:** 5/8 plans
+- **Current Phase Progress:** 5/12 plans
 - **Plans Total:** 12
-- **Plans Complete:** 10
+- **Plans Complete:** 9
 
 ## Phase History
 
@@ -39,6 +39,7 @@ progress:
   - 02-02: FrontendEvaluator with visual quality scoring — COMPLETED (commit: 6063ec6)
   - 02-03: CodeEvaluator with four-dimensional scoring — COMPLETED (commits: 22c17db, daddb35)
   - 02-04: EvaluatorSandbox isolated evaluation environment — COMPLETED (commits: 4f37d88, c6d754e, 3dc3ae4)
+  - 02-05: IterationController for gen-eval loop control — COMPLETED (commits: 1458466, 45f4839)
   - 02-06: FeedbackBridge for generator-evaluator communication — COMPLETED (commits: 11317f2, c3849ca)
 
 ## Milestone
@@ -55,12 +56,12 @@ progress:
 
 ## Last Updated
 
-2026-04-27 (Phase 02-06 completed)
+2026-04-27 (Phase 02-05 completed)
 
 ## Last Session
 
-- **Timestamp:** 2026-04-27T07:47:30Z
-- **Stopped At:** Completed 02-06-PLAN.md (FeedbackBridge)
+- **Timestamp:** 2026-04-27T08:15:00Z
+- **Stopped At:** Completed 02-05-PLAN.md (IterationController)
 - **Resume File:** None — plan fully completed
 
 ## Decisions Made
@@ -72,3 +73,6 @@ progress:
 - FeedbackBridge uses file-based communication per GE-03 for GAN-inspired loop
 - FeedbackMessage/FeedbackResult dataclasses for structured feedback
 - Polling approach for async evaluation (instead of callbacks)
+- IterationController convergence requires both score AND issue count stability
+- Sliding window approach for convergence detection over recent N iterations
+- IterationStats dataclass for tracking iteration history

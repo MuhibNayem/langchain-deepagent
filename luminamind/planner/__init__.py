@@ -2,6 +2,7 @@
 from luminamind.planner.spec import SpecDocument, UserStory, AcceptanceCriterion
 from luminamind.planner.negotiation import NegotiationState, NegotiationAction, NegotiationProtocol, InvalidTransitionError
 from luminamind.planner.sprint_contract import SprintContract
+from luminamind.planner.contract_verifier import ContractVerifier, VerificationReport, CriterionResult
 
 __all__ = [
     "SpecDocument",
@@ -12,4 +13,7 @@ __all__ = [
     "NegotiationProtocol",
     "InvalidTransitionError",
     "SprintContract",
+    "ContractVerifier",
+    "VerificationReport",
+    "CriterionResult",
 ]

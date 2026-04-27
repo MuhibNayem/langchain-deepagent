@@ -103,8 +103,12 @@ class EventBuffer:
             for _ in range(min(count, len(self._buffer))):
                 event = self._buffer.popleft()
                 result.append(event)
+                # Remove the index for this event
                 if event.event_id in self._index:
                     del self._index[event.event_id]
+                # Decrement all remaining indices since deque shifted left after popleft
+                for eid in list(self._index.keys()):
+                    self._index[eid] -= 1
             return result
 
     def size(self) -> int:

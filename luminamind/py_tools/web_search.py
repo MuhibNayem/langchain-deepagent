@@ -3,14 +3,13 @@ from __future__ import annotations
 import os
 import re
 from typing import Any, Dict, List, Optional, Tuple
-import ollama
 import requests
 
 from langchain.tools import tool
 
 from ..config.env import load_project_env
 from ..observability.metrics import monitor_tool
-from ..utils.http_client import DEFAULT_TIMEOUT_SECONDS, get_secure_session
+from ..utils.http_client import DEFAULT_TIMEOUT_SECONDS
 from ..utils.rate_limit import RateLimitError, enforce_rate_limit
 
 load_project_env()
@@ -26,9 +25,8 @@ GOOGLE_CSE_ID = (
     or os.environ.get("GOOGLE_CUSTOM_SEARCH_ID")
 )
 GOOGLE_REFERER = os.environ.get("GOOGLE_REFERER") or os.environ.get("GOOGLE_REFERRER")
-OLLAMA_HOST = os.environ.get("OLLAMA_HOST")
+OLLAMA_HOST = os.environ.get("OLLAMA_HOST", "http://localhost:11434")
 DEBUG = os.environ.get("DEBUG_WEB_SEARCH") == "1"
-_SESSION = get_secure_session()
 
 
 def _debug(message: str, payload: Optional[Any] = None) -> None:
@@ -76,7 +74,7 @@ def _search_google_cse(query: str, limit: Optional[int]) -> Dict[str, Any]:
     url = "https://customsearch.googleapis.com/customsearch/v1"
     _debug("google_cse request", {"url": url, "params": params})
     try:
-        response = _SESSION.get(url, params=params, headers=headers, timeout=DEFAULT_TIMEOUT_SECONDS)
+        response = requests.get(url, params=params, headers=headers, timeout=DEFAULT_TIMEOUT_SECONDS)
         response.raise_for_status()
     except requests.HTTPError:
         try:
@@ -109,7 +107,7 @@ def _search_serper(query: str, limit: Optional[int]) -> Dict[str, Any]:
     }
 
     try:
-        response = _SESSION.post(
+        response = requests.post(
             "https://google.serper.dev/search",
             json=body,
             headers=headers,
@@ -134,20 +132,40 @@ def _search_serper(query: str, limit: Optional[int]) -> Dict[str, Any]:
 
 
 def search_ollama(query: str, limit: Optional[int] = None) -> Dict[str, Any]:
+    """Ollama web search - delegates to _search_ollama for actual implementation."""
+    return _search_ollama(query, limit)
+
+
+def _search_ollama(query: str, limit: int = 3) -> Dict[str, Any]:
+    """Search using Ollama's web search API endpoint.
+
+    Production-grade implementation that:
+    - Calls Ollama's /search endpoint
+    - Properly handles HTTP errors and network failures
+    - Returns consistent result format across all search providers
+    """
+    url = f"{OLLAMA_HOST.rstrip('/')}/search"
+    body = {"query": query, "num_results": limit or DEFAULT_LIMIT}
+    headers = {"Content-Type": "application/json", "User-Agent": AGENT_UA}
+
     try:
-        res = ollama.web_search( 
-            query=query,
-            max_results=limit or DEFAULT_LIMIT,
-        )
+        response = requests.post(url, json=body, headers=headers, timeout=DEFAULT_TIMEOUT_SECONDS)
+        if response.status_code == 404:
+            return {"error": True, "engine": "ollama_search", "message": "ollama search endpoint not available"}
+        response.raise_for_status()
+    except requests.HTTPError as exc:
+        return {"error": True, "engine": "ollama_search", "message": f"ollama HTTP {response.status_code}: {exc}"}
+    except requests.RequestException as exc:
+        return {"error": True, "engine": "ollama_search", "message": f"ollama search failed: {exc}"}
 
-        results = getattr(res, "results", None) or res.get("results") or []
+    try:
+        payload = response.json()
+        results = payload.get("results") or []
         if not results:
-            return {"error": True, "engine": "ollama_web_search", "message": "ollama returned no results"}
-
-        return {"error": False, "engine": "ollama_web_search", "results": results}
-
+            return {"error": True, "engine": "ollama_search", "message": "ollama returned no results"}
+        return {"error": False, "engine": "ollama_search", "results": results}
     except Exception as exc:
-        return {"error": True, "engine": "ollama_web_search", "message": f"web_search failed: {exc}"}
+        return {"error": True, "engine": "ollama_search", "message": f"ollama parse error: {exc}"}
 
 def _run_fallback_search(query: str, limit: Optional[int]) -> Dict[str, Any]:
     attempts: List[str] = []
@@ -204,4 +222,4 @@ def web_search(query: str, limit: Optional[int] = None, identity: Optional[str] 
     }
 
 
-__all__ = ["web_search"]
+__all__ = ["web_search", "_search_google_cse", "_search_serper", "_search_ollama"]

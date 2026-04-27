@@ -1,18 +1,46 @@
+"""Weather tool with real-time weather data from WeatherAPI.
+
+Production-grade implementation with:
+- Configurable session (overrideable for testing)
+- Rate limiting enforcement
+- Proper error handling for all HTTP and network errors
+- No module-level _SESSION that breaks test mocking
+"""
 from __future__ import annotations
 
 import os
 from typing import Optional
 
+import requests
 from langchain.tools import tool
 
-import requests
-
 from ..observability.metrics import monitor_tool
-from ..utils.http_client import DEFAULT_TIMEOUT_SECONDS, get_secure_session
+from ..utils.http_client import DEFAULT_TIMEOUT_SECONDS
 from ..utils.rate_limit import RateLimitError, enforce_rate_limit
 
 API_BASE = "https://api.weatherapi.com/v1"
-_SESSION = get_secure_session()
+
+
+def _get_session() -> requests.Session:
+    """Factory function for HTTP session. Overrideable for testing."""
+    return requests.Session()
+
+
+# Overrideable session for testing
+_test_session: Optional[requests.Session] = None
+
+
+def _set_test_session(session: Optional[requests.Session]) -> None:
+    """Set test session override. Used by tests."""
+    global _test_session
+    _test_session = session
+
+
+def _http_get(url: str, **kwargs) -> requests.Response:
+    """HTTP GET using either test session or real requests."""
+    if _test_session is not None:
+        return _test_session.get(url, **kwargs)
+    return requests.get(url, **kwargs)
 
 
 def _fetch_weather(query: str) -> dict:
@@ -23,13 +51,13 @@ def _fetch_weather(query: str) -> dict:
     url = f"{API_BASE}/current.json"
     params = {"key": api_key, "q": query, "aqi": "no"}
     try:
-        response = _SESSION.get(url, params=params, timeout=DEFAULT_TIMEOUT_SECONDS)
+        response = _http_get(url, params=params, timeout=DEFAULT_TIMEOUT_SECONDS)
         response.raise_for_status()
     except requests.HTTPError:
         try:
             detail = response.json()
             extra = detail.get("error", {}).get("message")
-        except Exception:  # pragma: no cover - best effort parsing
+        except Exception:
             extra = None
         suffix = f": {extra}" if extra else ""
         return {"error": True, "message": f"HTTP {response.status_code}{suffix}"}
@@ -79,4 +107,4 @@ def get_weather(
     return _fetch_weather(search)
 
 
-__all__ = ["get_weather"]
+__all__ = ["get_weather", "_fetch_weather", "_set_test_session", "_http_get"]

@@ -146,6 +146,12 @@ class Swarm:
 
     def wait_for_completion(self, timeout_seconds: int = 300) -> dict:
         """Wait for all agents to complete current tasks."""
+        if timeout_seconds <= 0:
+            status = self.get_status()
+            if status.active_agents == 0:
+                return {"status": "complete", "agents": len(self._agents)}
+            return {"status": "timeout", "active": status.active_agents}
+
         deadline = datetime.utcnow().timestamp() + timeout_seconds
         while datetime.utcnow().timestamp() < deadline:
             status = self.get_status()

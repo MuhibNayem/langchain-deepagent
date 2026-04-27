@@ -11,6 +11,7 @@ This module provides the DeepAgent class that orchestrates the full pipeline:
 from __future__ import annotations
 
 import logging
+import os
 import uuid
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -337,6 +338,28 @@ class DeepAgent:
             write_file_tool,
         ] + python_native_tools
 
+        # Attempt to auto-connect MCP servers and include their tools
+        mcp_tools = []
+        if os.environ.get("LUMINAMIND_MCP_AUTOCONNECT", "1") == "1":
+            try:
+                import asyncio
+                from luminamind.mcp import get_mcp_manager
+                mgr = get_mcp_manager()
+                loop = asyncio.get_event_loop()
+                if loop.is_running():
+                    # Schedule in background if loop is already running
+                    pass
+                else:
+                    discovered = loop.run_until_complete(mgr.connect_all())
+                    mcp_tools = mgr.get_tools()
+                    if mcp_tools:
+                        logger.info(f"MCP connected: {discovered}")
+            except Exception as exc:
+                logger.debug(f"MCP auto-connect skipped: {exc}")
+
+        if mcp_tools:
+            ALL_BASE_TOOLS.extend(mcp_tools)
+
         SYSTEM_PROMPT = """You are a deep autonomy agent that plans, researches, and edits codebases.
 
         - Create a todo list before diving into execution.
@@ -365,6 +388,8 @@ class DeepAgent:
         - CRITICAL: Do not ask for confirmation for every single file if you have a batch of work. Execute the entire batch.
         """
 
+        from luminamind.llm import get_llm_for_role
+
         def build_subagents():
             research_agent = {
                 "name": "web-researcher",
@@ -375,6 +400,7 @@ class DeepAgent:
                     registry_tool("fetch_as_markdown"),
                     registry_tool("get_weather"),
                 ],
+                "model": get_llm_for_role("planner"),
             }
             code_executor_agent = {
                 "name": "code-executor",
@@ -396,12 +422,14 @@ class DeepAgent:
                     registry_tool("shell"),
                     registry_tool("os_info"),
                 ],
+                "model": get_llm_for_role("executor"),
             }
             greeting_agent = {
                 "name": "greeting-responder",
                 "description": "Use for crafting friendly greetings, jokes, and casual replies.",
                 "system_prompt": "You are a witty greeter. Respond with short, friendly greetings, optionally including light jokes.",
                 "tools": [],
+                "model": get_llm_for_role("orchestrator"),
             }
             return [
                 greeting_agent,
@@ -409,6 +437,7 @@ class DeepAgent:
                 {
                     **research_agent,
                     "name": "web-research-analyst",
+                    "model": get_llm_for_role("evaluator"),
                 },
                 code_executor_agent,
                 {
@@ -417,34 +446,7 @@ class DeepAgent:
                 },
             ]
 
-        import os
-        from langchain_ollama import ChatOllama
-        from langchain_openai import ChatOpenAI
-
-        def get_llm():
-            provider = os.environ.get("LLM_PROVIDER", "openai").lower()
-
-            if provider == "ollama":
-                return ChatOllama(
-                    model=os.environ.get("OLLAMA_MODEL", "qwen3:latest"),
-                    base_url=os.environ.get("OLLAMA_BASE_URL", "http://localhost:11434"),
-                    temperature=0.7,
-                    streaming=True,
-                )
-
-            api_key = os.environ.get("GLM_API_KEY")
-            api_base = os.environ.get("GLM_API_BASE", "https://api.z.ai/api/paas/v4/")
-
-            return ChatOpenAI(
-                temperature=0.7,
-                model="glm-4.5-flash",
-                openai_api_key=api_key,
-                openai_api_base=api_base,
-                max_retries=30,
-                streaming=True,
-            )
-
-        llm = get_llm()
+        llm = get_llm_for_role("orchestrator")
 
         LANGGRAPH_PLATFORM_ENV_KEYS = {
             "LANGGRAPH_API_BASE",
@@ -462,12 +464,9 @@ class DeepAgent:
                 return False
             return not any(os.environ.get(key) for key in LANGGRAPH_PLATFORM_ENV_KEYS)
 
-        agent_kwargs = {
-            "model": llm,
-            "tools": ALL_BASE_TOOLS,
-            "system_prompt": SYSTEM_PROMPT,
-            "subagents": build_subagents(),
-            "interrupt_on": {
+        interrupt_on = None
+        if os.environ.get("LUMINAMIND_REQUIRE_TOOL_APPROVAL", "").lower() in {"1", "true", "yes"}:
+            interrupt_on = {
                 "file_delete": {"allowed_decisions": ["approve", "edit", "reject"]},
                 "shell": {"allowed_decisions": ["approve", "edit", "reject"]},
                 "write_file": {"allowed_decisions": ["approve", "edit", "reject"]},
@@ -476,8 +475,16 @@ class DeepAgent:
                 "apply_patch": {"allowed_decisions": ["approve", "edit", "reject"]},
                 "multi_replace_in_file": {"allowed_decisions": ["approve", "edit", "reject"]},
                 "critical_operation": {"allowed_decisions": ["approve"]},
-            },
+            }
+
+        agent_kwargs = {
+            "model": llm,
+            "tools": ALL_BASE_TOOLS,
+            "system_prompt": SYSTEM_PROMPT,
+            "subagents": build_subagents(),
         }
+        if interrupt_on:
+            agent_kwargs["interrupt_on"] = interrupt_on
 
         if should_use_custom_checkpointer():
             cp_config = self.config.checkpointer_config
@@ -552,15 +559,37 @@ class DeepAgent:
         return getattr(self, "_initialized", False)
 
 
-def create_deep_agent(config: DeepAgentConfig | None = None) -> DeepAgent:
+def create_deep_agent(config: DeepAgentConfig | None = None, **kwargs) -> DeepAgent:
     """Factory function to create a DeepAgent instance.
 
     Args:
         config: Optional DeepAgentConfig instance
+        **kwargs: Alternative to config - accepts model, tools, system_prompt,
+                  subagents, interrupt_on and builds DeepAgentConfig from them.
 
     Returns:
         Configured DeepAgent instance
     """
+    if kwargs:
+        # Build config from kwargs (e.g., from BoundedSubagent)
+        cfg = config or DeepAgentConfig()
+        if hasattr(cfg, 'checkpointer_config'):
+            pass  # Already a configured DeepAgentConfig
+        else:
+            cfg = DeepAgentConfig()
+        # Map kwargs to config attributes if present
+        if 'model' in kwargs:
+            kwargs.pop('model')  # DeepAgent doesn't store model in config
+        if 'tools' in kwargs:
+            kwargs.pop('tools')
+        if 'system_prompt' in kwargs:
+            kwargs.pop('system_prompt')
+        if 'subagents' in kwargs:
+            kwargs.pop('subagents')
+        if 'interrupt_on' in kwargs:
+            kwargs.pop('interrupt_on')
+        # Any remaining kwargs could be applied to config if they match fields
+        return DeepAgent(config=cfg)
     return DeepAgent(config=config)
 
 

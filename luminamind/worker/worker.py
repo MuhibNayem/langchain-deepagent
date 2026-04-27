@@ -3,7 +3,7 @@ import signal
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
-from typing import Optional
+from typing import Optional, Any
 
 
 class WorkerStatus(Enum):
@@ -16,11 +16,32 @@ class WorkerStatus(Enum):
 
 @dataclass
 class WorkerConfig:
+    """Unified worker configuration.
+
+    The legacy Worker uses the queue/heartbeat fields. The production
+    TaskWorker uses the pool/retry fields. Keeping one public config preserves
+    old imports while allowing the modern worker APIs to share it.
+    """
     worker_id: str = ""
     queue_name: str = "default"
     heartbeat_interval_seconds: int = 30
     max_concurrent_tasks: int = 1
     graceful_shutdown_timeout_seconds: int = 60
+    max_workers: int = 4
+    max_retries: int = 3
+    retry_delay: float = 5.0
+    retry_multiplier: float = 2.0
+    max_retry_delay: float = 300.0
+    task_timeout: int | None = 600
+    idle_timeout: int = 300
+    poll_interval: float = 1.0
+    mode: Any = None
+    backend_url: str | None = None
+
+    def __post_init__(self) -> None:
+        if self.mode is None:
+            from luminamind.worker.producer import WorkerMode
+            self.mode = WorkerMode.SPRING
 
 
 class Worker:
@@ -100,4 +121,5 @@ class Worker:
             with self._lock:
                 if not self._tasks_in_flight:
                     return
-            threading.sleep(0.1)
+            import time
+            time.sleep(0.1)

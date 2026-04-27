@@ -32,9 +32,9 @@ class TestShell:
             stdout="",
             stderr="Command failed"
         )
-        
-        result = shell.invoke({"command": "exit 1"})
-        
+
+        result = shell.invoke({"command": "echo test"})
+
         assert result["error"] is True
         assert result["code"] == 1
         assert result["stderr"] == "Command failed"
@@ -42,10 +42,10 @@ class TestShell:
     @patch('luminamind.py_tools.shell.subprocess.run')
     def test_shell_timeout(self, mock_run):
         """Test shell command timeout."""
-        mock_run.side_effect = subprocess.TimeoutExpired(cmd="sleep 10", timeout=1)
-        
-        result = shell.invoke({"command": "sleep 10", "timeout_ms": 1000})
-        
+        mock_run.side_effect = subprocess.TimeoutExpired(cmd="echo", timeout=1)
+
+        result = shell.invoke({"command": "echo hello", "timeout_ms": 1000})
+
         assert result["error"] is True
         assert "Command timed out" in result["message"]
 
@@ -69,9 +69,9 @@ class TestShell:
     def test_shell_subprocess_error(self, mock_run):
         """Test shell command with subprocess error."""
         mock_run.side_effect = subprocess.SubprocessError("Subprocess error")
-        
-        result = shell.invoke({"command": "invalid_command"})
-        
+
+        result = shell.invoke({"command": "ls"})
+
         assert result["error"] is True
         assert "Subprocess error" in result["message"]
 

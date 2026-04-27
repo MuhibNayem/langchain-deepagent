@@ -37,6 +37,16 @@ class Task:
     error: Optional[str] = None
     idempotency_key: Optional[str] = None
 
+    @property
+    def task_id(self) -> str:
+        """Compatibility alias for production worker/result code."""
+        return self.id
+
+    @property
+    def name(self) -> str:
+        """Compatibility alias for task descriptions."""
+        return self.type
+
 
 @dataclass
 class QueueMetrics:

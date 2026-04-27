@@ -23,7 +23,7 @@ class RoleModelMapping:
     provider: str  # e.g., "openai", "anthropic"
     model: str     # e.g., "gpt-4o", "claude-3-5-sonnet"
     temperature: float = 0.7
-    max_tokens: int = 4000
+    max_tokens: int | None = None
     enabled: bool = True
 
 
@@ -61,17 +61,29 @@ class ModelRegistry:
                 provider=mapping['provider'],
                 model=mapping['model'],
                 temperature=mapping.get('temperature', 0.7),
-                max_tokens=mapping.get('max_tokens', 4000),
+                max_tokens=mapping.get('max_tokens'),
                 enabled=mapping.get('enabled', True)
             )
 
+        # Migration: if orchestrator is missing, this is an old config — regenerate
+        if AgentRole.ORCHESTRATOR not in self._mappings:
+            self._create_default()
+
     def _create_default(self) -> None:
-        """Create default configuration."""
+        """Create default configuration.
+
+        Defaults tuned for cost-effectiveness with the user's provider portfolio:
+        - Planner: kimi-k2.6 (strong reasoning, unlimited tokens)
+        - Executor: glm-4.7-flash (free tier, fast, unlimited tokens)
+        - Evaluator: MiniMax-M2.7 (good quality, unlimited tokens)
+        - Critic: glm-4.7-flash (free tier, 15k token budget for long critiques)
+        """
         defaults = {
-            AgentRole.PLANNER: RoleModelMapping(AgentRole.PLANNER, "openai", "gpt-4o", 0.7, 4000),
-            AgentRole.EXECUTOR: RoleModelMapping(AgentRole.EXECUTOR, "anthropic", "claude-3-haiku", 0.5, 2000),
-            AgentRole.EVALUATOR: RoleModelMapping(AgentRole.EVALUATOR, "openai", "gpt-4o-mini", 0.3, 1000),
-            AgentRole.CRITIC: RoleModelMapping(AgentRole.CRITIC, "anthropic", "claude-3-haiku", 0.3, 500),
+            AgentRole.PLANNER: RoleModelMapping(AgentRole.PLANNER, "moonshot", "kimi-k2.6", 0.7, None),
+            AgentRole.EXECUTOR: RoleModelMapping(AgentRole.EXECUTOR, "zhipu", "glm-4.7-flash", 0.5, None),
+            AgentRole.EVALUATOR: RoleModelMapping(AgentRole.EVALUATOR, "minimax", "MiniMax-M2.7", 0.3, None),
+            AgentRole.CRITIC: RoleModelMapping(AgentRole.CRITIC, "zhipu", "glm-4.7-flash", 0.3, 15000),
+            AgentRole.ORCHESTRATOR: RoleModelMapping(AgentRole.ORCHESTRATOR, "zhipu", "glm-4.7-flash", 0.7, None),
         }
 
         for role, mapping in defaults.items():
@@ -112,15 +124,24 @@ class ModelRegistry:
         return list(self._mappings.values())
 
     def get_default_for_role(self, role: AgentRole) -> RoleModelMapping:
-        """Get mapping for role, falling back to executor defaults."""
+        """Get mapping for role, falling back to sensible defaults."""
         mapping = self.get(role)
         if mapping and mapping.enabled:
             return mapping
+        # Fallback defaults mirror the primary defaults
+        fallbacks = {
+            AgentRole.PLANNER: ("moonshot", "kimi-k2.6", 0.7, None),
+            AgentRole.EXECUTOR: ("zhipu", "glm-4.7-flash", 0.5, None),
+            AgentRole.EVALUATOR: ("minimax", "MiniMax-M2.7", 0.3, None),
+            AgentRole.CRITIC: ("zhipu", "glm-4.7-flash", 0.3, 15000),
+            AgentRole.ORCHESTRATOR: ("zhipu", "glm-4.7-flash", 0.7, None),
+        }
+        provider, model, temp, max_tok = fallbacks.get(role, ("zhipu", "glm-4.7-flash", 0.5, None))
         return RoleModelMapping(
             role=role,
-            provider="openai",
-            model="gpt-4o-mini",
-            temperature=0.5,
-            max_tokens=2000,
-            enabled=True
+            provider=provider,
+            model=model,
+            temperature=temp,
+            max_tokens=max_tok,
+            enabled=True,
         )

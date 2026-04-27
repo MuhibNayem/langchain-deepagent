@@ -10,7 +10,7 @@ from typing import Any, TypedDict
 
 from langgraph.graph import StateGraph, END
 
-from luminamind.llm import get_llm
+from luminamind.llm import get_llm_for_role
 from luminamind.evaluator.live_verifier import LiveVerifier, VerificationConfig, LiveVerificationReport
 
 
@@ -75,7 +75,7 @@ class EvaluatorAgent:
         max_iterations: int = 5,
         live_verifier: LiveVerifier | None = None,
     ):
-        self.model = model or get_llm()
+        self.model = model or get_llm_for_role("evaluator")
         self.grading_criteria = grading_criteria
         self.max_iterations = max_iterations
         self.live_verifier = live_verifier

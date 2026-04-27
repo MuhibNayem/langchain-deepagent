@@ -22,10 +22,10 @@ class ModelPresets:
             name='free_optimal',
             description='Use free models where possible, paid only when needed',
             mappings={
-                'planner': 'moonshot/kimi-k2.6',  # Paid - complex reasoning
-                'executor': 'zhipu/glm-4.7-flash',  # FREE
-                'evaluator': 'moonshot/kimi-k2.6',  # Paid - quality needed
-                'critic': 'zhipu/glm-4.7-flash',  # FREE
+                'planner': 'moonshot/kimi-k2.6',       # Paid - best reasoning
+                'executor': 'zhipu/glm-4.7-flash',     # FREE - fast execution
+                'evaluator': 'minimax/MiniMax-M2.7',   # Good quality evaluator
+                'critic': 'zhipu/glm-4.7-flash',       # FREE - long-context critique
             },
             is_free_optimal=True
         ),
@@ -34,8 +34,8 @@ class ModelPresets:
             description='Balanced mix of quality and cost',
             mappings={
                 'planner': 'moonshot/kimi-k2.6',
-                'executor': 'minimax/m2.7',
-                'evaluator': 'openai/gpt-4o-mini',
+                'executor': 'zhipu/glm-4.7-flash',
+                'evaluator': 'minimax/MiniMax-M2.7',
                 'critic': 'zhipu/glm-4.7-flash',
             }
         ),
@@ -43,10 +43,10 @@ class ModelPresets:
             name='quality',
             description='Maximum quality, cost secondary',
             mappings={
-                'planner': 'openai/gpt-4o',
-                'executor': 'anthropic/claude-3-5-sonnet',
-                'evaluator': 'openai/gpt-4o',
-                'critic': 'anthropic/claude-3-5-sonnet',
+                'planner': 'moonshot/kimi-k2.6',
+                'executor': 'moonshot/kimi-k2.6',
+                'evaluator': 'minimax/MiniMax-M2.7',
+                'critic': 'moonshot/kimi-k2.6',
             }
         ),
         'fast': PresetProfile(
@@ -54,9 +54,9 @@ class ModelPresets:
             description='Fast response times, lower cost',
             mappings={
                 'planner': 'zhipu/glm-4.7-flash',
-                'executor': 'openai/gpt-4o-mini',
-                'evaluator': 'openai/gpt-4o-mini',
-                'critic': 'openai/gpt-4o-mini',
+                'executor': 'zhipu/glm-4.7-flash',
+                'evaluator': 'zhipu/glm-4.7-flash',
+                'critic': 'zhipu/glm-4.7-flash',
             }
         ),
     }

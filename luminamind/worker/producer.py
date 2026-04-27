@@ -362,8 +362,13 @@ class SwarmWorker:
 
         self._running = True
 
-        # Start agent consumer threads - each takes a role
-        for role_name in ["planner", "executor", "evaluator"]:
+        roles = ["planner", "generator", "reviewer"]
+        with self.swarm._lock:
+            active_count = sum(1 for agent in self.swarm._agents.values() if agent.status != "dead")
+            available_slots = max(self.swarm.config.max_agents - active_count, 0)
+
+        # Start only consumers that can actually spawn an agent.
+        for role_name in roles[:available_slots]:
             t = threading.Thread(target=self._consume_messages, args=(role_name,), daemon=True)
             t.start()
             self._threads.append(t)
@@ -383,7 +388,11 @@ class SwarmWorker:
         from luminamind.swarm.roles import AgentRole
 
         role = AgentRole(role_name)
-        agent_id = self.swarm.spawn(role=role)
+        try:
+            agent_id = self.swarm.spawn(role=role)
+        except RuntimeError as exc:
+            logger.warning(f"SwarmWorker could not spawn {role_name} consumer: {exc}")
+            return
 
         while self._running and not self._shutdown.is_set():
             # Get messages for this agent from swarm
@@ -405,20 +414,9 @@ class SwarmWorker:
     def _execute_message(self, message, agent_id: str) -> None:
         """Execute a message and report outcome back to swarm."""
         task = Task(
-            task_id=message.payload.get("task_id", str(uuid.uuid4())),
-            name=message.payload.get("task_name", "swarm_task"),
-            func=lambda: self._task_executor._execute_spring(
-                Task(
-                    task_id=str(uuid.uuid4()),
-                    name=message.payload.get("task_name", "swarm_task"),
-                    func=lambda: None,
-                    args=(),
-                    kwargs={},
-                    payload=message.payload,
-                )
-            ),
-            args=(),
-            kwargs={},
+            id=message.payload.get("task_id", str(uuid.uuid4())),
+            type=message.payload.get("task_name", "swarm_task"),
+            payload=message.payload,
         )
         result = self._task_executor.execute(task, self._worker_id)
 

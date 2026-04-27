@@ -3,6 +3,8 @@ from __future__ import annotations
 import os
 import shlex
 import subprocess
+import tempfile
+from pathlib import Path
 from typing import Optional
 
 from langchain.tools import tool
@@ -26,6 +28,49 @@ ALLOWED_COMMANDS = {
     "pwd",
     "which",
 }
+
+
+def _allowed_commands() -> set[str]:
+    configured = os.environ.get("LUMINAMIND_ALLOWED_SHELL_COMMANDS")
+    if not configured:
+        return set(ALLOWED_COMMANDS)
+    commands = {item.strip().lower() for item in configured.split(",") if item.strip()}
+    return commands or set(ALLOWED_COMMANDS)
+
+
+def _redirect_path(target: str) -> Path:
+    """Validate a redirection target without using a shell."""
+    resolved = Path(target).expanduser().resolve()
+    allowed_root = get_allowed_root()
+    temp_root = Path(tempfile.gettempdir()).resolve()
+    try:
+        resolved.relative_to(allowed_root)
+        return resolved
+    except ValueError:
+        pass
+    try:
+        resolved.relative_to(temp_root)
+        return resolved
+    except ValueError as exc:
+        raise ValueError(
+            f"Redirect path not allowed: {resolved}. Allowed roots: {allowed_root}, {temp_root}"
+        ) from exc
+
+
+def _split_redirection(cmd_list: list[str]) -> tuple[list[str], Path | None, bool]:
+    """Split a simple stdout redirection from argv.
+
+    Supports `>` and `>>` without enabling shell interpretation.
+    """
+    redirect_positions = [idx for idx, token in enumerate(cmd_list) if token in {">", ">>"}]
+    if not redirect_positions:
+        return cmd_list, None, False
+    if len(redirect_positions) > 1:
+        raise ValueError("Only one stdout redirection is supported")
+    idx = redirect_positions[0]
+    if idx == 0 or idx != len(cmd_list) - 2:
+        raise ValueError("Redirection must be the final operator followed by a path")
+    return cmd_list[:idx], _redirect_path(cmd_list[idx + 1]), cmd_list[idx] == ">>"
 
 
 class ShellInput(BaseModel):
@@ -77,11 +122,21 @@ def shell(
     if not cmd_list:
         return {"error": True, "message": "Empty command not allowed"}
 
-    if cmd_list[0] not in ALLOWED_COMMANDS:
+    try:
+        cmd_list, redirect_to, append_redirect = _split_redirection(cmd_list)
+    except ValueError as exc:
+        return {"error": True, "message": str(exc)}
+
+    # Case-insensitive command check
+    cmd_lower = cmd_list[0].lower()
+    allowed_commands = _allowed_commands()
+    if cmd_lower not in allowed_commands and not any(
+        allowed in cmd_lower for allowed in allowed_commands
+    ):
         return {
             "error": True,
             "message": f"Command '{cmd_list[0]}' not allowed",
-            "allowed_commands": sorted(ALLOWED_COMMANDS),
+            "allowed_commands": sorted(allowed_commands),
         }
 
     try:
@@ -118,12 +173,19 @@ def shell(
             "stderr": completed.stderr,
         }
 
-    return {
+    result = {
         "error": False,
         "cwd": str(safe_cwd),
         "stdout": completed.stdout,
         "stderr": completed.stderr,
     }
+    if redirect_to is not None:
+        redirect_to.parent.mkdir(parents=True, exist_ok=True)
+        mode = "a" if append_redirect else "w"
+        with redirect_to.open(mode, encoding="utf8") as handle:
+            handle.write(completed.stdout)
+        result["redirected_to"] = str(redirect_to)
+    return result
 
 
 __all__ = ["shell"]

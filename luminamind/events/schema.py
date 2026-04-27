@@ -89,9 +89,23 @@ class EventSchema:
     @classmethod
     def validate(cls, event: AgentEvent) -> bool:
         """Validate event against current schema."""
-        pass
+        if not event.event_id:
+            return False
+        if not isinstance(event.event_type, AgentEventType):
+            return False
+        if not event.agent_id:
+            return False
+        if not isinstance(event.timestamp, datetime):
+            return False
+        if not isinstance(event.data, dict):
+            return False
+        if not event.session_id:
+            return False
+        return True
 
     @classmethod
     def migrate(cls, event: AgentEvent, from_version: str) -> AgentEvent:
         """Migrate event from older schema version."""
-        pass
+        if from_version == "1.0":
+            return event
+        return event

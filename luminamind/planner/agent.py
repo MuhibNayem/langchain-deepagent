@@ -9,7 +9,7 @@ import re
 from dataclasses import dataclass, field
 
 from luminamind.planner.spec import SpecDocument, UserStory, AcceptanceCriterion
-from luminamind.llm import get_llm
+from luminamind.llm import get_llm_for_role
 
 
 @dataclass
@@ -126,7 +126,7 @@ class PlannerAgent:
     """
 
     def __init__(self, model=None, max_complexity: str = "high"):
-        self.model = model or get_llm()
+        self.model = model or get_llm_for_role("planner")
         self.max_complexity = max_complexity
 
     def generate_spec(self, feature_request: str) -> SpecResult:

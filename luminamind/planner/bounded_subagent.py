@@ -118,11 +118,11 @@ class BoundedSubagent:
         )
 
         # Import here to avoid circular dependency
-        from luminamind.llm import get_llm
+        from luminamind.llm import get_llm_for_role
         from luminamind.deep_agent import create_deep_agent
 
-        # Create agent
-        self.model = get_llm()
+        # Create agent with role-specific LLM (executor = tool-coding subagent)
+        self.model = get_llm_for_role("executor")
 
         # Build agent kwargs - only include interrupt_on if non-empty
         agent_kwargs = {

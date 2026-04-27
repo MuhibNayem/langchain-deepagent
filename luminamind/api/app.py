@@ -1,3 +1,5 @@
+import os
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -24,12 +26,16 @@ def create_app(task_queue=None, scheduler=None, swarm=None, auth=None) -> FastAP
     app = FastAPI(title="LuminaMind API", version="1.0.0")
 
     # CORS
+    # CORS: restrict in production; allow_credentials=False with wildcard origins
+    cors_origins = os.environ.get("CORS_ORIGINS", "*").split(",")
+    cors_origins = [o.strip() for o in cors_origins if o.strip()]
+    allow_credentials = os.environ.get("CORS_ALLOW_CREDENTIALS", "false").lower() == "true"
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=["*"],
-        allow_credentials=True,
-        allow_methods=["*"],
-        allow_headers=["*"],
+        allow_origins=cors_origins,
+        allow_credentials=allow_credentials,
+        allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+        allow_headers=["Authorization", "Content-Type", "X-API-Key"],
     )
 
     # Rate limiting

@@ -14,26 +14,27 @@ def get_global_config_path() -> Path:
 def load_project_env() -> None:
     """
     Load environment variables.
-    
+
     Priority (highest to lowest):
-    1. System environment variables (already set)
+    1. System environment variables (already set and non-empty)
     2. Global configuration (~/.config/luminamind/.env)
     3. Project .env file
-    
-    load_dotenv does not override existing variables by default, so we load in order of priority.
+
+    Empty environment variables are treated as unset so that .env files
+    can populate them.
     """
-    # 1. Load global config
+    # 1. Load global config (override empty env vars)
     global_env = get_global_config_path()
     if global_env.exists():
-        load_dotenv(dotenv_path=global_env)
+        load_dotenv(dotenv_path=global_env, override=True)
 
-    # 2. Load project config
+    # 2. Load project config (takes highest priority)
     project_env = Path.cwd() / ".env"
     if project_env.exists():
-        load_dotenv(dotenv_path=project_env)
+        load_dotenv(dotenv_path=project_env, override=True)
     else:
         # Fallback to searching up the tree if no local .env
-        load_dotenv()
+        load_dotenv(override=True)
 
 
 def configure_global_env(force: bool = False) -> None:

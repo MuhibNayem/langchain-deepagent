@@ -59,6 +59,7 @@ class Swarm:
         self._lock = threading.Lock()
         self._message_bus = message_bus
         self._message_queue: list[SwarmMessage] = []
+        self._total_tasks: int = 0
 
     def spawn(self, role: AgentRole, config: dict = None) -> str:
         """Spawn a new agent with the given role."""
@@ -82,6 +83,7 @@ class Swarm:
                 status="idle",
                 config=config or {},
             )
+            self._total_tasks += 1
             return agent_id
 
     def kill(self, agent_id: str) -> bool:
@@ -129,7 +131,7 @@ class Swarm:
             return SwarmStatus(
                 active_agents=active,
                 idle_agents=idle,
-                total_tasks=len(self._agents),
+                total_tasks=self._total_tasks,
                 pending_tasks=idle,
             )
 

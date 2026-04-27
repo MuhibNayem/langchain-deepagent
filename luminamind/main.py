@@ -39,8 +39,22 @@ from .config.env import load_project_env, ensure_global_env, configure_global_en
 from .observability.logging import setup_logging
 from .observability.metrics import start_metrics_server
 
+# Import chaos module
+from luminamind.chaos import (
+    ChaosEngine,
+    ChaosReport,
+    ChaosSuiteResult,
+    generate_chaos_report,
+    list_scenarios,
+    run_chaos_test,
+    save_json_report,
+    SCENARIOS,
+)
+
 console = Console()
 cli = typer.Typer(help="Interactive Deep Agent CLI", invoke_without_command=True)
+chaos_cli = typer.Typer(help="Chaos testing commands for resilience validation")
+cli.add_typer(chaos_cli, name="chaos", invoke_without_command=True)
 _observability_initialized = False
 
 STATUS_PHRASES = [
@@ -569,10 +583,10 @@ def chat(thread: Optional[str] = typer.Option(None, help="Existing thread ID to 
     ensure_global_env()
     load_project_env()
     _initialize_observability()
-    
+
     # Lazy import to avoid early initialization before config is loaded
     from .deep_agent import app as default_app, agent_kwargs
-    
+
     current_thread = thread or str(uuid7())
     typer.echo("Deep Agent CLI")
     typer.echo("Type your question. Press Meta+Enter (or Esc then Enter) to submit. Commands: /exit, /reset")
@@ -638,6 +652,189 @@ def chat(thread: Optional[str] = typer.Option(None, help="Existing thread ID to 
             console.print("\n[red]🛑 Agent interrupted by user.[/]")
         except Exception as exc:
             console.print(f"\n[red]Agent error:[/] {exc}")
+
+
+demo_cli = typer.Typer(help="Run LuminaMind demo applications showcasing harness capabilities.")
+cli.add_typer(demo_cli, name="demo", help="Demo commands")
+
+
+@chaos_cli.callback(invoke_without_command=True)
+def chaos_main(ctx: typer.Context) -> None:
+    """Chaos testing for resilience validation."""
+    pass
+
+
+@chaos_cli.command("list")
+def chaos_list() -> None:
+    """List all available chaos scenarios."""
+    scenarios = list_scenarios()
+    console.print(Panel.fit("[bold cyan]Available Chaos Scenarios[/bold cyan]", border_style="cyan"))
+    table = Table(show_header=True, header_style="bold magenta")
+    table.add_column("ID")
+    table.add_column("Name")
+    table.add_column("Type")
+    table.add_column("Severity")
+
+    for scenario in scenarios:
+        table.add_row(
+            scenario.id,
+            scenario.name,
+            scenario.scenario_type.name,
+            str(scenario.severity),
+        )
+    console.print(table)
+    console.print(f"\n[dim]Total: {len(scenarios)} scenarios[/dim]")
+
+
+@chaos_cli.command("run")
+def chaos_run(
+    scenario_id: str = typer.Option(None, help="Specific scenario ID to run (default: all)"),
+    task: str = typer.Option("test resilience", help="Task description for chaos test"),
+    output: Path = typer.Option(None, help="Output file for JSON results"),
+) -> None:
+    """Run chaos scenarios to test system resilience."""
+    console.print("[bold yellow]Starting chaos testing...[/bold yellow]")
+
+    engine = ChaosEngine()
+
+    if scenario_id:
+        # Run single scenario
+        if scenario_id not in SCENARIOS:
+            console.print(f"[red]Unknown scenario: {scenario_id}[/red]")
+            console.print("[dim]Run 'luminamind chaos list' to see available scenarios[/dim]")
+            raise typer.Exit(code=1)
+
+        console.print(f"[cyan]Running scenario: {scenario_id}[/cyan]")
+        result = engine.run_scenario(scenario_id, task)
+
+        console.print(f"[green]Scenario complete:[/green]")
+        console.print(f"  Outcome: {result.outcome}")
+        console.print(f"  Graceful: {result.graceful_degradation}")
+        console.print(f"  Execution time: {result.execution_time:.2f}s")
+
+        suite_result = ChaosSuiteResult(results=[result], total_scenarios=1, passed=1 if result.outcome != "failed" else 0, failed=1 if result.outcome == "failed" else 0)
+
+    else:
+        # Run all scenarios
+        console.print("[cyan]Running all chaos scenarios...[/cyan]")
+        suite_result = engine.run_all_scenarios(task)
+
+        console.print(f"\n[green]Chaos suite complete:[/green]")
+        console.print(f"  Total: {suite_result.total_scenarios}")
+        console.print(f"  Passed: {suite_result.passed}")
+        console.print(f"  Failed: {suite_result.failed}")
+
+    # Generate and display report
+    report = generate_chaos_report(suite_result)
+    console.print(Panel.fit(Markdown(report), title="Chaos Test Report", border_style="green"))
+
+    # Save JSON if output path specified
+    if output:
+        save_json_report(suite_result, output)
+        console.print(f"[dim]JSON report saved to: {output}[/dim]")
+
+
+@chaos_cli.command("report")
+def chaos_report(
+    input_path: Path = typer.Argument(..., help="Path to JSON results file"),
+) -> None:
+    """Display a chaos test report from JSON results."""
+    import json
+
+    if not input_path.exists():
+        console.print(f"[red]File not found: {input_path}[/red]")
+        raise typer.Exit(code=1)
+
+    data = json.loads(input_path.read_text())
+    report = ChaosReport(
+        timestamp=data.get("timestamp", ""),
+        total_scenarios=data.get("total_scenarios", 0),
+        passed=data.get("passed", 0),
+        failed=data.get("failed", 0),
+        results=[],
+        summary_by_type=data.get("summary_by_type", {}),
+    )
+
+    console.print(Panel.fit(Markdown(generate_chaos_report(
+        ChaosSuiteResult(results=[], total_scenarios=report.total_scenarios, passed=report.passed, failed=report.failed)
+    )), title="Chaos Report", border_style="green"))
+
+
+@demo_cli.command("list")
+def demo_list() -> None:
+    """List available demo applications."""
+    table = Table(title="Available Demos")
+    table.add_column("Demo", style="cyan")
+    table.add_column("Description", style="dim")
+    table.add_row("frontend", "Frontend design demo using evaluator")
+    table.add_row("fullstack", "Full-stack application demo")
+    table.add_row("codereview", "Code review demo using evaluator")
+    table.add_row("all", "Run all demos sequentially")
+    console.print(table)
+
+
+@demo_cli.command("frontend")
+def demo_frontend() -> None:
+    """Run the frontend design demo."""
+    from luminamind.demos.frontend_demo import run_frontend_demo
+
+    console.print(Panel.fit(
+        "[bold cyan]Frontend Design Demo[/]\n[dim]Generating and evaluating a responsive landing page[/]",
+        border_style="cyan"
+    ))
+    result = run_frontend_demo()
+    if result.get("passed"):
+        console.print("[green]✓ Demo completed successfully![/green]")
+    else:
+        console.print("[red]✗ Demo did not pass evaluation.[/red]")
+
+
+@demo_cli.command("fullstack")
+def demo_fullstack() -> None:
+    """Run the full-stack application demo."""
+    from luminamind.demos.fullstack_demo import run_fullstack_demo
+
+    console.print(Panel.fit(
+        "[bold cyan]Full-Stack App Demo[/]\n[dim]Generating a FastAPI backend with React frontend[/]",
+        border_style="cyan"
+    ))
+    result = run_fullstack_demo()
+    if result.get("passed"):
+        console.print("[green]✓ Demo completed successfully![/green]")
+    else:
+        console.print("[red]✗ Demo did not pass evaluation.[/red]")
+
+
+@demo_cli.command("codereview")
+def demo_codereview() -> None:
+    """Run the code review demo."""
+    from luminamind.demos.codereview_demo import run_codereview_demo
+
+    console.print(Panel.fit(
+        "[bold cyan]Code Review Demo[/]\n[dim]Detecting security vulnerabilities in sample code[/]",
+        border_style="cyan"
+    ))
+    result = run_codereview_demo()
+    if result.get("passed"):
+        console.print("[green]✓ Demo completed successfully![/green]")
+    else:
+        console.print("[red]✗ Demo detected critical security issues.[/red]")
+
+
+@demo_cli.command("all")
+def demo_all() -> None:
+    """Run all demo applications sequentially."""
+    from luminamind.demos import run_all_demos
+
+    console.print(Panel.fit(
+        "[bold cyan]LuminaMind Harness Demo Suite[/]\n[dim]Running all demonstrations[/]",
+        border_style="cyan"
+    ))
+    result = run_all_demos()
+    if result.get("success"):
+        console.print("\n[green]✓ All demos completed successfully![/green]")
+    else:
+        console.print("\n[red]✗ Some demos failed. Check output for details.[/red]")
 
 
 if __name__ == "__main__":

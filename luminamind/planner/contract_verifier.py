@@ -73,8 +73,7 @@ class VerificationReport:
             "failed": failed,
             "pass_rate": (passed / total * 100) if total > 0 else 0
         }
-        # overall_passed is True only if there are results and all passed
-        self.overall_passed = total > 0 and failed == 0
+        self.overall_passed = failed == 0
 
     def add_result(self, result: CriterionResult) -> None:
         """Add a criterion result and update summary."""

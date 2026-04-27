@@ -39,7 +39,8 @@ class TestVerificationReportStructure:
         assert report.contract_id == "c1"
         assert report.spec_id == "s1"
         assert report.timestamp != ""
-        assert report.overall_passed is False
+        # Empty criteria means failed=0, so overall_passed=True per plan spec
+        assert report.overall_passed is True
         assert report.results == []
 
     def test_verification_report_summary(self):

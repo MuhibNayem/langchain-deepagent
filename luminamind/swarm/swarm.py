@@ -112,9 +112,18 @@ class Swarm:
 
     def send_to(self, agent_id: str, message: SwarmMessage) -> None:
         """Send direct message to specific agent."""
+        # Validate agent_id is not None or empty
+        if not agent_id:
+            raise ValueError("agent_id cannot be empty")
+        # Validate message is not None
+        if message is None:
+            raise ValueError("message cannot be None")
         with self._lock:
             if not self._validate_sender(message.sender_id):
                 raise ValueError(f"Invalid sender_id: {message.sender_id}")
+            # Check self-messaging
+            if agent_id == message.sender_id:
+                raise ValueError("Cannot send message to self")
             if agent_id not in self._agents or self._agents[agent_id].status == "dead":
                 raise ValueError(f"Invalid recipient_id: {agent_id}")
             message.recipient_id = agent_id

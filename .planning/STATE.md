@@ -2,53 +2,65 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-current_phase: 05
-status: executing
-stopped_at: Phase 03 complete — 03-08 (Subagent Communication Layer)
-last_updated: "2026-04-27T10:56:31.166Z"
+current_phase: 06
+status: pre_execution
+stopped_at: Phase 05 complete — 05-05 (Recovery and Retry Framework)
+last_updated: "2026-04-27T14:00:00.000Z"
 progress:
-  total_phases: 5
-  completed_phases: 4
-  total_plans: 30
-  completed_plans: 25
-  percent: 83
+  total_phases: 9
+  completed_phases: 5
+  total_plans: 47
+  completed_plans: 30
+  percent: 64
 ---
 
 # State
 
 **Project:** LuminaMind Harness Engineering
-**Current Phase:** 05
-**Status:** Executing Phase 05
+**Current Phase:** 06 — Production Hardening
+**Status:** Pre-execution (research complete, ready to start)
 **Mode:** yolo
 **Model Profile:** balanced
 
 ## Progress
 
-- **Total Phases:** 7
-- **Completed Phases:** 3 (Phase 01, Phase 02, Phase 03)
-- **Current Phase:** Phase 04 — Live Verification Infrastructure
-- **Current Phase Progress:** 3/5 plans (04-01, 04-02, 04-03 exist)
-- **Plans Total:** 31
-- **Plans Complete:** 19
+- **Total Phases:** 9
+- **Completed Phases:** 5 (Phase 01, Phase 02, Phase 03, Phase 04, Phase 05)
+- **Current Phase:** Phase 06 — Production Hardening
+- **Current Phase Progress:** 0/6 plans (research done, plans ready)
+- **Plans Total:** 47
+- **Plans Complete:** 30
 
 ## Phase History
 
 - **Phase 01:** Context & Memory Infrastructure — COMPLETED
+  - 01-01 through 01-04: All completed
 - **Phase 02:** Generator-Evaluator Architecture — COMPLETED
   - 02-01 through 02-08: All completed
 - **Phase 03:** Planner & Sprint System — COMPLETED
-  - 03-01: PlannerAgent — COMPLETED
-  - 03-02: SpecBuilder — COMPLETED
-  - 03-03: PlannerEvaluatorIntegration — COMPLETED
-  - 03-04: Sprint contract framework — COMPLETED
-  - 03-05: ContractVerifier — COMPLETED
-  - 03-06: SprintManager — COMPLETED
-  - 03-07: BoundedSubagent — COMPLETED
-  - 03-08: AgentMessageBus — COMPLETED
-- **Phase 04:** Live Verification Infrastructure — IN PROGRESS
-  - 04-01: Playwright MCP bridge — IN PROGRESS (plan exists)
-  - 04-02: Visual regression detection — IN PROGRESS (plan exists)
-  - 04-03: API testing integration — IN PROGRESS (plan exists)
+  - 03-01 through 03-08: All completed
+- **Phase 04:** Live Verification Infrastructure — COMPLETED
+  - 04-01: Playwright MCP bridge — COMPLETED
+  - 04-02: Visual regression detection — COMPLETED
+  - 04-03: API testing integration — COMPLETED
+  - 04-04: Database state verifier — COMPLETED
+  - 04-05: Evaluator integration — COMPLETED
+- **Phase 05:** Tool & Prompt Optimization — COMPLETED
+  - 05-01: Tool audit and tiering — COMPLETED
+  - 05-02: Prompt preset library — COMPLETED
+  - 05-03: Dynamic prompt composition — COMPLETED
+  - 05-04: Lifecycle hook system — COMPLETED
+  - 05-05: Recovery and retry framework — COMPLETED
+- **Phase 06:** Production Hardening — PRE-EXECUTION
+  - 06-01: Harness-specific metrics — READY (research done)
+  - 06-02: Harness debugging tools — READY
+  - 06-03: Safety enhancements — READY
+  - 06-04: Approval workflow integration — READY
+  - 06-05: Token usage optimization — READY
+  - 06-06: Parallelization — READY
+- **Phase 07:** Integration & Testing — PLANNED
+- **Phase 08:** Agent Swarm & Scheduled Automation — PLANNED
+- **Phase 09:** Self-Evolving & Futuristic — PLANNED
 
 ## Milestone
 
@@ -64,13 +76,13 @@ progress:
 
 ## Last Updated
 
-2026-04-27 (Phase 03 completed, Phase 04 plans exist)
+2026-04-27 (Phase 05 completed, Phase 06 research complete, ready for execution)
 
 ## Last Session
 
-- **Timestamp:** 2026-04-27T15:58:00Z
-- **Stopped At:** Phase 03 complete — 03-08 (Subagent Communication Layer)
-- **Resume File:** None — Phase 04 plans ready for execution
+- **Timestamp:** 2026-04-27T14:00:00Z
+- **Stopped At:** Phase 05 complete — 05-05 (Recovery and Retry Framework)
+- **Resume File:** None — Phase 06 plans ready for execution
 
 ## Decisions Made
 
@@ -89,3 +101,13 @@ progress:
 - RefinementResult and RoundResult dataclasses for structured pipeline output
 - CriteriaEngine uses registry pattern for domain criteria management
 - Default weights: design=0.30, code=0.35, craft=0.15, originality=0.20
+- FallbackChain for retry with exponential backoff
+- Lifecycle hooks: on_init, on_start, on_step, on_complete, on_error, on_exit
+
+## Phase 09 Features (Vision)
+
+- **Per-Role Model Selection:** MiniMax M2.7, GLM-4.7-flash (FREE), Kimi K2.6
+- **Free Model Strategy:** GLM-4.7-flash = $0 for executor/critic roles
+- **Agent Customization:** Editable prompts, criteria, tool access, LLM params
+- **One-Command Install:** `curl -fsSL install.sh | bash`
+- **Docker-based deployment** with docker-compose

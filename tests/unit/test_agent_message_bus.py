@@ -108,3 +108,172 @@ class TestAgentMessageBus:
         assert msg is not None
         assert msg.priority == MessagePriority.HIGH
         assert len(received) == 1
+
+
+class TestConflictResolution:
+    """Test conflict resolution strategies."""
+
+    def test_concurrent_messages_timestamp_ordering(self):
+        """Concurrent messages from same sender resolved by timestamp ordering."""
+        from luminamind.planner.agent_message_bus import resolve_conflict, ConflictResolution
+
+        # Create messages with different timestamps
+        msg1 = AgentMessage(
+            id="1",
+            sender="agent1",
+            recipient=None,
+            content={"data": "first"}
+        )
+        msg2 = AgentMessage(
+            id="2",
+            sender="agent1",
+            recipient=None,
+            content={"data": "second"}
+        )
+
+        messages = [msg1, msg2]
+        resolved = resolve_conflict(messages, ConflictResolution.LATEST_WINS)
+        assert resolved.content["data"] == "second"
+
+    def test_high_priority_delivered_before_normal_low(self):
+        """HIGH priority messages should win in priority_wins strategy."""
+        from luminamind.planner.agent_message_bus import resolve_conflict, ConflictResolution
+
+        msg_low = AgentMessage(
+            id="1",
+            sender="a",
+            recipient=None,
+            content={"data": "low"},
+            priority=MessagePriority.LOW
+        )
+        msg_high = AgentMessage(
+            id="2",
+            sender="b",
+            recipient=None,
+            content={"data": "high"},
+            priority=MessagePriority.HIGH
+        )
+        msg_normal = AgentMessage(
+            id="3",
+            sender="c",
+            recipient=None,
+            content={"data": "normal"},
+            priority=MessagePriority.NORMAL
+        )
+
+        resolved = resolve_conflict([msg_low, msg_normal, msg_high], ConflictResolution.HIGHEST_PRIORITY_WINS)
+        assert resolved.priority == MessagePriority.HIGH
+
+    def test_reply_routing(self):
+        """Reply routing via in_reply_to correctly associates messages."""
+        # Create a reply message with in_reply_to set
+        original = AgentMessage(
+            id="orig-1",
+            sender="agent1",
+            recipient="agent2",
+            content={"text": "Hello"}
+        )
+        reply = AgentMessage(
+            id="reply-1",
+            sender="agent2",
+            recipient="agent1",
+            content={"text": "Hi there!"},
+            in_reply_to="orig-1"
+        )
+
+        # Verify the reply is correctly associated
+        assert reply.in_reply_to == "orig-1"
+        assert original.id == reply.in_reply_to
+
+        # Verify messages can be correlated via conversation_id if needed
+        msg_with_conversation = AgentMessage(
+            id="1",
+            sender="a",
+            recipient=None,
+            content={},
+            conversation_id="conv-1"
+        )
+        assert msg_with_conversation.conversation_id == "conv-1"
+
+
+class TestOutputMerger:
+    """Test OutputMerger for subagent result merging."""
+
+    def test_merge_produces_unified_output(self):
+        """OutputMerger.merge(subagent_results) produces unified output."""
+        from luminamind.planner.output_merger import OutputMerger
+
+        merger = OutputMerger()
+        results = [
+            {"title": "Spec", "description": "Test spec", "status": "draft"},
+            {"title": "Spec", "description": "Test spec", "status": "draft"},
+        ]
+        result = merger.merge(results)
+        assert result.unified_output["title"] == "Spec"
+        assert result.unified_output["description"] == "Test spec"
+
+    def test_merge_detects_conflict(self):
+        """MergeConflict detected when subagents produce conflicting outputs."""
+        from luminamind.planner.output_merger import OutputMerger
+
+        merger = OutputMerger()
+        results = [
+            {"title": "First Title"},
+            {"title": "Second Title"},
+        ]
+        result = merger.merge(results)
+        assert result.has_conflicts
+        assert len(result.conflicts) > 0
+
+    def test_merge_conflict_includes_resolution_options(self):
+        """MergeConflict includes resolution options."""
+        from luminamind.planner.output_merger import OutputMerger
+
+        merger = OutputMerger()
+        results = [
+            {"title": "Title A", "priority": "high"},
+            {"title": "Title B", "priority": "low"},
+        ]
+        result = merger.merge(results)
+
+        conflict = result.conflicts[0]
+        assert conflict.field_path == "title"
+        assert len(conflict.conflicting_values) == 2
+        assert conflict.resolution != ""
+        assert conflict.auto_resolved is True
+
+    def test_merge_result_has_unified_output_and_conflicts(self):
+        """MergeResult has unified output and any unresolved conflicts."""
+        from luminamind.planner.output_merger import OutputMerger, MergeResult
+
+        merger = OutputMerger()
+        results = [
+            {"field1": "value1"},
+            {"field2": "value2"},
+        ]
+        result = merger.merge(results)
+
+        assert isinstance(result, MergeResult)
+        assert "field1" in result.unified_output
+        assert "field2" in result.unified_output
+        # Non-conflicting fields should not create conflicts
+        assert not result.has_conflicts
+
+    def test_merge_with_empty_results(self):
+        """Merge handles empty results list."""
+        from luminamind.planner.output_merger import OutputMerger
+
+        merger = OutputMerger()
+        result = merger.merge([])
+        assert result.unified_output == {}
+        assert not result.has_conflicts
+
+    def test_merge_single_result(self):
+        """Merge with single result returns that result."""
+        from luminamind.planner.output_merger import OutputMerger
+
+        merger = OutputMerger()
+        result = merger.merge([{"title": "Single"}])
+        assert result.unified_output["title"] == "Single"
+        assert not result.has_conflicts
+

@@ -12,6 +12,7 @@ for generator-evaluator communication.
 """
 from __future__ import annotations
 
+import time
 import uuid
 from dataclasses import dataclass, field
 from typing import Any
@@ -19,6 +20,12 @@ from typing import Any
 from luminamind.evaluator.iteration import IterationController, IterationStats
 from luminamind.evaluator.feedback_bridge import FeedbackBridge
 from luminamind.evaluator.agent import EvaluatorAgent, GradingResult
+from luminamind.observability.harness_metrics import HarnessMetrics
+from luminamind.observability.decision_logger import (
+    DecisionLogger,
+    DecisionPoint,
+    TraceEntry,
+)
 
 
 @dataclass
@@ -63,6 +70,10 @@ class RoundResult:
     trend: str = "stable"
 
 
+# Module-level decision logger instance
+_decision_logger = DecisionLogger()
+
+
 class RefinementPipeline:
     """Multi-round refinement pipeline per GE-03.
 
@@ -71,6 +82,7 @@ class RefinementPipeline:
     - Uses FeedbackBridge for generator-evaluator communication
     - Enforces configurable quality gate threshold
     - Supports early termination on quality threshold or convergence
+    - Logs decisions and trace entries for debugging replay
 
     Args:
         generator: The generator agent (main agent) that produces artifacts
@@ -95,6 +107,7 @@ class RefinementPipeline:
         )
         self.bridge = bridge or FeedbackBridge()
         self.quality_gate = quality_gate
+        self._metrics = HarnessMetrics()
 
     def refine(
         self,
@@ -117,6 +130,9 @@ class RefinementPipeline:
 
         # Run iteration loop via controller
         result, stats = self.controller.run(current_artifact)
+
+        # Log trace entry with decisions at iteration boundaries
+        self._log_iteration_trace(session_id, current_artifact, result, stats)
 
         # Quality gate enforcement
         if result.score < self.quality_gate:
@@ -289,3 +305,88 @@ class RefinementPipeline:
     def _get_iteration_guidance(self, result: GradingResult) -> str:
         """Get guidance for next iteration."""
         return f"Focus on: {', '.join(result.issues[:3])}"
+
+    def _log_iteration_trace(
+        self,
+        session_id: str,
+        artifact: Any,
+        result: GradingResult,
+        stats: IterationStats,
+    ) -> None:
+        """Log a trace entry for the iteration.
+
+        Creates a TraceEntry with decisions from quality gate and convergence.
+        """
+        decisions: list[DecisionPoint] = []
+
+        # Quality gate decision
+        quality_decision = DecisionPoint(
+            decision_id=str(uuid.uuid4()),
+            timestamp=datetime.now(),
+            phase="iteration",
+            decision_type="quality_gate",
+            context={
+                "scores": result.score,
+                "threshold": self.quality_gate,
+            },
+            choice="pass" if result.score >= self.quality_gate else "fail",
+            alternatives=["fail"] if result.score >= self.quality_gate else ["pass"],
+            rationale=f"score {result.score} {'above' if result.score >= self.quality_gate else 'below'} threshold {self.quality_gate}",
+            outcome="converged" if result.score >= self.quality_gate else "needs_refinement",
+        )
+        decisions.append(quality_decision)
+
+        # Convergence decision
+        convergence_decision = DecisionPoint(
+            decision_id=str(uuid.uuid4()),
+            timestamp=datetime.now(),
+            phase="iteration",
+            decision_type="convergence",
+            context={
+                "iteration_count": stats.iteration,
+                "stability": self._compute_stability(stats),
+            },
+            choice="converged" if stats.converged else "continue",
+            alternatives=["continue"] if stats.converged else ["converged"],
+            rationale=f"iteration {stats.iteration}: {'converged' if stats.converged else 'not converged'}",
+            outcome=stats.reason,
+        )
+        decisions.append(convergence_decision)
+
+        # Create trace entry
+        entry = TraceEntry(
+            entry_id=str(uuid.uuid4()),
+            timestamp=datetime.now(),
+            step_number=stats.iteration,
+            component="refinement_pipeline",
+            action=f"iteration_{stats.iteration}_complete",
+            inputs={"task_description": getattr(artifact, "__name__", str(artifact))},
+            outputs={
+                "score": result.score,
+                "issues": result.issues,
+            },
+            decisions=decisions,
+            metadata={
+                "session_id": session_id,
+                "reason": stats.reason,
+            },
+        )
+
+        _decision_logger.log_trace_entry(entry, session_id)
+
+    def _compute_stability(self, stats: IterationStats) -> str:
+        """Compute stability description for convergence tracking."""
+        if len(stats.score_history) < 2:
+            return "insufficient_data"
+
+        recent_scores = stats.score_history[-3:] if len(stats.score_history) >= 3 else stats.score_history
+        if len(recent_scores) < 2:
+            return "insufficient_data"
+
+        score_diff = max(recent_scores) - min(recent_scores)
+        if score_diff <= 0.05:
+            return "stable"
+        elif score_diff <= 0.15:
+            return "moderately_changing"
+        else:
+            return "volatile"

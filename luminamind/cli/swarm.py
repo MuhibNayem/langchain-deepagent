@@ -3,6 +3,8 @@ import requests
 import os
 import json
 
+from luminamind.deep_agent import DeepAgent
+
 API_BASE = os.environ.get("LUMINAMIND_API_URL", "http://localhost:8000")
 
 

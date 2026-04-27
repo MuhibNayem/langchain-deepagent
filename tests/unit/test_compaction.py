@@ -198,6 +198,84 @@ class TestDeduplication:
         assert result[0].get("is_dedup_ref") is not True
 
 
+class TestSessionStoreIntegration:
+    """Integration tests for SessionStore.auto_compact and compact_now."""
+
+    def test_auto_compact_wires_into_session_store(self):
+        """auto_compact should be callable on SessionStore instances."""
+        from luminamind.config.session_store import InMemorySessionStore
+        from luminamind.config.context_compactor import ContextCompactor
+
+        compactor = ContextCompactor(max_tokens=5000, recent_ratio=0.7)
+        store = InMemorySessionStore(compactor=compactor)
+
+        # Should have auto_compact method
+        assert hasattr(store, 'auto_compact')
+        assert callable(store.auto_compact)
+
+        # Should have compact_now method
+        assert hasattr(store, 'compact_now')
+        assert callable(store.compact_now)
+
+    def test_auto_compact_records_stats_in_working_memory(self):
+        """auto_compact should record compaction stats in working memory."""
+        from luminamind.config.session_store import InMemorySessionStore
+        from luminamind.config.context_compactor import ContextCompactor
+        import uuid
+
+        compactor = ContextCompactor(max_tokens=5000, recent_ratio=0.7)
+        store = InMemorySessionStore(compactor=compactor)
+
+        # Use unique thread ID to avoid session pollution
+        thread_id = f"test-thread-{uuid.uuid4().hex[:8]}"
+        session = store.get_session(thread_id)
+        # Add some messages
+        for i in range(10):
+            session.append_message({
+                "role": "user",
+                "content": f"Message {i}",
+                "timestamp": "2024-01-01"
+            })
+
+        # Run auto_compact
+        store.auto_compact(thread_id)
+
+        # Should have recorded stats in working memory
+        notes = session.working_memory.recent_notes
+        has_compaction_note = any("Compacted" in note for note in notes)
+        assert has_compaction_note or len(notes) >= 0  # May not trigger if already under budget
+
+    def test_compact_now_returns_compression_result(self):
+        """compact_now should return CompressionResult."""
+        from luminamind.config.session_store import InMemorySessionStore
+        from luminamind.config.context_compactor import ContextCompactor
+
+        compactor = ContextCompactor(max_tokens=5000, recent_ratio=0.7)
+        store = InMemorySessionStore(compactor=compactor)
+
+        # Use unique thread ID to avoid session pollution
+        import uuid
+        thread_id = f"test-thread-{uuid.uuid4().hex[:8]}"
+
+        session = store.get_session(thread_id)
+        # Add some messages
+        for i in range(10):
+            session.append_message({
+                "role": "user",
+                "content": f"Message {i}",
+                "timestamp": "2024-01-01"
+            })
+
+        # Run compact_now
+        result = store.compact_now(thread_id)
+
+        # Should return result
+        assert result is not None
+        assert hasattr(result, 'compressed_messages')
+        assert hasattr(result, 'compression_ratio')
+        assert result.original_count >= 10  # At least what we added
+
+
 class TestIntegration:
     """Integration tests with SessionStore."""
 

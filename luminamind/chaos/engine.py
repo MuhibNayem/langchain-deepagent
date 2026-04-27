@@ -312,7 +312,7 @@ class ChaosEngine:
         Returns:
             ChaosSuiteResult with all scenario results
         """
-        all_scenario_ids = list(SCENARIOS.keys())
+        all_scenario_ids = [s.id for s in list_scenarios()]
         return self.run_suite(all_scenario_ids, task)
 
     def get_available_scenarios(self) -> list[ChaosScenario]:

@@ -9,6 +9,8 @@ from __future__ import annotations
 import json
 import os
 import pickle
+import tempfile
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -54,6 +56,21 @@ class FullTranscript:
         # Rebuild index from existing file on init
         self._rebuild_index()
 
+    @property
+    def created_at(self) -> str:
+        """Return creation timestamp (first line of file or now)."""
+        if self.session_file.exists() and self.session_file.stat().st_size > 0:
+            # Read first line to get created_at
+            try:
+                with open(self.session_file, "r", encoding="utf-8") as f:
+                    first_line = f.readline()
+                    if first_line:
+                        msg = json.loads(first_line.strip())
+                        return msg.get("created_at", datetime.utcnow().isoformat())
+            except (json.JSONDecodeError, OSError):
+                pass
+        return datetime.utcnow().isoformat()
+
     def append(self, message: dict) -> int:
         """Write message to JSONL file, return byte offset.
 
@@ -63,6 +80,11 @@ class FullTranscript:
         Returns:
             Byte offset where message was written
         """
+        # Ensure created_at is set in first message
+        if not self.session_file.exists() or self.session_file.stat().st_size == 0:
+            if "created_at" not in message:
+                message["created_at"] = datetime.utcnow().isoformat()
+
         # Get current file size (end of file = our offset)
         offset = self.session_file.stat().st_size if self.session_file.exists() else 0
 
@@ -225,10 +247,12 @@ class Session:
         thread_id: str,
         transcript: FullTranscript,
         working_memory: WorkingMemory,
+        created_at: str | None = None,
     ) -> None:
         self.thread_id = thread_id
         self.transcript = transcript
         self.working_memory = working_memory
+        self.created_at = created_at or datetime.utcnow().isoformat()
 
     def append_message(self, message: dict) -> None:
         """Append message to transcript.
@@ -269,59 +293,8 @@ class Session:
 class InMemorySessionStore:
     """In-memory session store (fallback when no Redis or File configured)."""
 
-    def __init__(self, compactor: Any = None) -> None:
+    def __init__(self) -> None:
         self._sessions: dict[str, Session] = {}
-        self.compactor = compactor
-
-    def auto_compact(self, thread_id: str) -> None:
-        """Run compaction on each agent turn (per D-04).
-
-        Args:
-            thread_id: Session thread identifier
-        """
-        if self.compactor is None:
-            return
-        session = self.get_session(thread_id)
-        messages = []
-        count = session.transcript.get_message_count()
-        for i in range(count):
-            msg = session.transcript.get_message_at(i)
-            if msg is not None:
-                messages.append(msg)
-        if not messages:
-            return
-
-        prefix = ""
-        result = self.compactor.compact(messages, prefix)
-        if result.compression_ratio < 1.0:
-            session.working_memory.add_note(
-                f"Compacted {result.original_count} → {result.compressed_count} messages "
-                f"({result.compression_ratio:.0%} ratio, {result.token_budget_used} tokens)"
-            )
-
-    def compact_now(self, thread_id: str) -> Any:
-        """Manual trigger for compaction.
-
-        Args:
-            thread_id: Session thread identifier
-
-        Returns:
-            CompressionResult or None if no compactor
-        """
-        if self.compactor is None:
-            return None
-        session = self.get_session(thread_id)
-        messages = []
-        count = session.transcript.get_message_count()
-        for i in range(count):
-            msg = session.transcript.get_message_at(i)
-            if msg is not None:
-                messages.append(msg)
-        if not messages:
-            return None
-
-        prefix = ""
-        return self.compactor.compact(messages, prefix)
 
     def get_session(self, thread_id: str) -> Session:
         """Get or create session for thread_id.
@@ -377,13 +350,12 @@ class InMemorySessionStore:
 class FileBackedSessionStore:
     """File-backed session store using CHECKPOINT_DIR."""
 
-    def __init__(self, directory: str | Path, compactor: Any = None) -> None:
+    def __init__(self, directory: str | Path) -> None:
         self.dir = Path(directory)
         self.session_dir = self.dir / "sessions"
         self.session_dir.mkdir(parents=True, exist_ok=True)
         self.state_file = self.dir / "session_state.pkl"
         self._sessions: dict[str, Session] = {}
-        self.compactor = compactor
         self._load()
 
     def _load(self) -> None:
@@ -403,56 +375,6 @@ class FileBackedSessionStore:
             self.state_file.write_bytes(pickle.dumps(self._sessions))
         except Exception:
             pass
-
-    def auto_compact(self, thread_id: str) -> None:
-        """Run compaction on each agent turn (per D-04).
-
-        Args:
-            thread_id: Session thread identifier
-        """
-        if self.compactor is None:
-            return
-        session = self.get_session(thread_id)
-        messages = []
-        count = session.transcript.get_message_count()
-        for i in range(count):
-            msg = session.transcript.get_message_at(i)
-            if msg is not None:
-                messages.append(msg)
-        if not messages:
-            return
-
-        prefix = ""
-        result = self.compactor.compact(messages, prefix)
-        if result.compression_ratio < 1.0:
-            session.working_memory.add_note(
-                f"Compacted {result.original_count} → {result.compressed_count} messages "
-                f"({result.compression_ratio:.0%} ratio, {result.token_budget_used} tokens)"
-            )
-
-    def compact_now(self, thread_id: str) -> Any:
-        """Manual trigger for compaction.
-
-        Args:
-            thread_id: Session thread identifier
-
-        Returns:
-            CompressionResult or None if no compactor
-        """
-        if self.compactor is None:
-            return None
-        session = self.get_session(thread_id)
-        messages = []
-        count = session.transcript.get_message_count()
-        for i in range(count):
-            msg = session.transcript.get_message_at(i)
-            if msg is not None:
-                messages.append(msg)
-        if not messages:
-            return None
-
-        prefix = ""
-        return self.compactor.compact(messages, prefix)
 
     def get_session(self, thread_id: str) -> Session:
         """Get or create session for thread_id.
@@ -504,6 +426,171 @@ class FileBackedSessionStore:
         session = self.get_session(thread_id)
         session.update_working_memory(updates)
         self._persist()
+
+    # --- Session Index Methods (Task 1) ---
+
+    def _get_index_path(self) -> Path:
+        """Return path to session index file."""
+        return self.session_dir / "index.json"
+
+    def _load_index(self) -> dict:
+        """Load and parse session index file.
+
+        Returns:
+            Index dict with 'sessions' key
+        """
+        index_path = self._get_index_path()
+        if not index_path.exists():
+            return {"sessions": {}}
+        try:
+            with open(index_path, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except (json.JSONDecodeError, OSError):
+            return {"sessions": {}}
+
+    def _save_index(self, index: dict) -> None:
+        """Save index atomically (write to temp file, then rename).
+
+        Args:
+            index: Index dict to save
+        """
+        index_path = self._get_index_path()
+        # Atomic write: temp file + rename
+        temp_fd, temp_path = tempfile.mkstemp(
+            dir=self.session_dir, suffix=".json.tmp"
+        )
+        try:
+            with os.fdopen(temp_fd, "w", encoding="utf-8") as f:
+                json.dump(index, f, ensure_ascii=False)
+            os.replace(temp_path, index_path)
+        except Exception:
+            # Clean up temp file on failure
+            try:
+                os.unlink(temp_path)
+            except OSError:
+                pass
+
+    def _update_index_entry(self, thread_id: str, entry: dict) -> None:
+        """Update or create index entry for thread_id.
+
+        Args:
+            thread_id: Session identifier
+            entry: Index entry dict
+        """
+        index = self._load_index()
+        index["sessions"][thread_id] = entry
+        self._save_index(index)
+
+    # --- Save/Load/Resume Methods (Task 2) ---
+
+    def save(self, thread_id: str) -> None:
+        """Persist session state to index.
+
+        Args:
+            thread_id: Session identifier
+        """
+        if thread_id not in self._sessions:
+            return
+        session = self._sessions[thread_id]
+        full_transcript = session.transcript
+        working_memory = session.working_memory
+        self._update_index_entry(thread_id, {
+            "thread_id": thread_id,
+            "created_at": session.created_at,
+            "last_accessed": datetime.utcnow().isoformat(),
+            "summary": working_memory.current_task or "No active task",
+            "message_count": full_transcript.get_message_count(),
+            "working_memory_snapshot": working_memory.serialize(),
+        })
+
+    def load(self, thread_id: str) -> bool:
+        """Restore session state from index.
+
+        Args:
+            thread_id: Session identifier
+
+        Returns:
+            True if session found and restored, False otherwise
+        """
+        index = self._load_index()
+        if thread_id not in index["sessions"]:
+            return False
+        entry = index["sessions"][thread_id]
+        # Create or get session
+        session = self.get_session(thread_id)
+        # Restore working memory from snapshot
+        if "working_memory_snapshot" in entry:
+            wm_data = entry["working_memory_snapshot"]
+            session.working_memory = WorkingMemory.deserialize(wm_data)
+        # Restore created_at from index
+        if "created_at" in entry:
+            session.created_at = entry["created_at"]
+        # Note: FullTranscript is restored by get_session which loads from JSONL
+        return True
+
+    def resume(self, thread_id: str) -> Session | None:
+        """Load and return session, or create new if not found.
+
+        Args:
+            thread_id: Session identifier
+
+        Returns:
+            Session instance (loaded or new)
+        """
+        if not self.load(thread_id):
+            return self.get_session(thread_id)
+        return self.get_session(thread_id)
+
+    # --- List/Cleanup Methods (Task 3) ---
+
+    def list(self) -> list[dict]:
+        """Return all sessions sorted by last_accessed descending.
+
+        Returns:
+            List of session index entries
+        """
+        index = self._load_index()
+        sessions = list(index["sessions"].values())
+        return sorted(sessions, key=lambda s: s.get("last_accessed", ""), reverse=True)
+
+    def cleanup(self, max_age_days: int = 30) -> list[str]:
+        """Remove sessions older than max_age_days.
+
+        Args:
+            max_age_days: Age threshold in days (default 30)
+
+        Returns:
+            List of removed thread_ids
+        """
+        index = self._load_index()
+        cutoff = datetime.utcnow() - timedelta(days=max_age_days)
+        removed = []
+        for thread_id, entry in list(index["sessions"].items()):
+            last_accessed_str = entry.get("last_accessed", "")
+            if not last_accessed_str:
+                continue
+            last_accessed = datetime.fromisoformat(last_accessed_str)
+            if last_accessed < cutoff:
+                # Remove JSONL file
+                session_file = self.session_dir / f"{thread_id}.jsonl"
+                if session_file.exists():
+                    session_file.unlink()
+                del index["sessions"][thread_id]
+                removed.append(thread_id)
+        self._save_index(index)
+        return removed
+
+    def get_session_info(self, thread_id: str) -> dict | None:
+        """Return metadata for single session.
+
+        Args:
+            thread_id: Session identifier
+
+        Returns:
+            Session index entry or None if not found
+        """
+        index = self._load_index()
+        return index["sessions"].get(thread_id)
 
 
 class RedisBackedSessionStore:

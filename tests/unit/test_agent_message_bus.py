@@ -230,12 +230,14 @@ class TestOutputMerger:
         from luminamind.planner.output_merger import OutputMerger
 
         merger = OutputMerger()
+        # Use data with a clear conflict on one field only
         results = [
-            {"title": "Title A", "priority": "high"},
-            {"title": "Title B", "priority": "low"},
+            {"title": "Title A", "description": "Same"},  # title conflicts
+            {"title": "Title B", "description": "Same"},
         ]
         result = merger.merge(results)
 
+        assert result.has_conflicts
         conflict = result.conflicts[0]
         assert conflict.field_path == "title"
         assert len(conflict.conflicting_values) == 2

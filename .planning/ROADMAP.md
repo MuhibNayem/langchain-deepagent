@@ -128,12 +128,12 @@
 4. Token optimization achieves 40% reduction in context window allocation
 
 **Plans:**
-- [ ] 06-01: Harness-specific metrics (iteration count, evaluator score tracking, tool usage efficiency) — `.planning/phases/06-production-hardening/06-01-PLAN.md`
-- [ ] 06-02: Harness debugging tools (trace viewer, step-by-step replay, decision annotation) — `.planning/phases/06-production-hardening/06-02-PLAN.md`
-- [ ] 06-03: Safety enhancements (evaluator-specific checks, sandboxed code execution, circuit breakers) — `.planning/phases/06-production-hardening/06-03-PLAN.md`
-- [ ] 06-04: Approval workflow integration (automatic escalation, batch approval) — `.planning/phases/06-production-hardening/06-04-PLAN.md`
-- [ ] 06-05: Token usage optimization (smart context window allocation, compression, KV cache) — `.planning/phases/06-production-hardening/06-05-PLAN.md`
-- [ ] 06-06: Parallelization (concurrent subagent execution, result merging) — `.planning/phases/06-production-hardening/06-06-PLAN.md`
+- [x] 06-01: Harness-specific metrics (iteration count, evaluator score tracking, tool usage efficiency) — `.planning/phases/06-production-hardening/06-01-PLAN.md`
+- [x] 06-02: Harness debugging tools (trace viewer, step-by-step replay, decision annotation) — `.planning/phases/06-production-hardening/06-02-PLAN.md`
+- [x] 06-03: Safety enhancements (evaluator-specific checks, sandboxed code execution, circuit breakers) — `.planning/phases/06-production-hardening/06-03-PLAN.md`
+- [x] 06-04: Approval workflow integration (automatic escalation, batch approval) — `.planning/phases/06-production-hardening/06-04-PLAN.md`
+- [x] 06-05: Token usage optimization (smart context window allocation, compression, KV cache) — `.planning/phases/06-production-hardening/06-05-PLAN.md`
+- [x] 06-06: Parallelization (concurrent subagent execution, result merging) — `.planning/phases/06-production-hardening/06-06-PLAN.md`
 
 ---
 
@@ -633,7 +633,7 @@ volumes:
 | 03 | Planner & Sprint System | 8 | ✅ Complete |
 | 04 | Live Verification Infrastructure | 5 | In Progress |
 | 05 | 5/5 | Complete   | 2026-04-27 |
-| 06 | Production Hardening | 6 | Planned |
+| 06 | 6/6 | Complete   | 2026-04-27 |
 | 07 | Integration & Testing | 4 | Planned |
 | 08 | Agent Swarm & Scheduled Automation | 8 | Planned |
 | 09 | Self-Evolving & Futuristic | 10 | Planned |

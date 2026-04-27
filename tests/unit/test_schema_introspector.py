@@ -128,8 +128,14 @@ class TestSchemaIntrospector:
         mock_cursor = MagicMock()
         mock_conn.cursor.return_value = mock_cursor
 
-        # Mock sqlite_master query to return tables
-        mock_cursor.fetchall.return_value = [("users",), ("orders",)]
+        # First call: sqlite_master returns tables
+        # Second call: PRAGMA for 'users' table
+        # Third call: PRAGMA for 'orders' table
+        mock_cursor.fetchall.side_effect = [
+            [("users",), ("orders",)],  # sqlite_master
+            [(0, "id", "INTEGER", 1, None, 1), (1, "name", "TEXT", 0, None, 0)],  # PRAGMA for users
+            [(0, "id", "INTEGER", 1, None, 1)],  # PRAGMA for orders
+        ]
 
         inspector = SchemaIntrospector(mock_conn)
         schema = inspector._introspect_sqlite()
@@ -146,10 +152,12 @@ class TestSchemaIntrospector:
         mock_conn.cursor.return_value = mock_cursor
 
         # Mock PRAGMA table_info for users table
+        # PRAGMA returns: (cid, name, type, notnull, dflt_value, pk)
+        # notnull: 0 = nullable, 1 = NOT NULL
         mock_cursor.fetchall.return_value = [
-            (0, "id", "INTEGER", 1, None, 1),  # pk
-            (1, "name", "TEXT", 0, None, 0),
-            (2, "email", "TEXT", 1, None, 0),  # nullable
+            (0, "id", "INTEGER", 1, None, 1),  # pk, NOT NULL
+            (1, "name", "TEXT", 0, None, 0),   # nullable
+            (2, "email", "TEXT", 0, None, 0),  # nullable (notnull=0)
         ]
 
         inspector = SchemaIntrospector(mock_conn)

@@ -233,3 +233,51 @@ def circuit_breaker(
             return sync_wrapper
 
     return decorator
+
+
+class FallbackChain:
+    """Chain of fallback functions to try in order."""
+
+    def __init__(self, *functions: Callable[..., T]):
+        self._functions = list(functions)
+
+    def add_fallback(self, func: Callable[..., T]) -> FallbackChain:
+        """Add a fallback function to the chain."""
+        self._functions.append(func)
+        return self
+
+    async def execute(self, *args, **kwargs) -> T:
+        """Execute functions in order until one succeeds."""
+        last_error = None
+        for func in self._functions:
+            try:
+                if asyncio.iscoroutinefunction(func):
+                    return await func(*args, **kwargs)
+                else:
+                    return func(*args, **kwargs)
+            except Exception as e:
+                last_error = e
+                continue
+
+        if last_error:
+            raise last_error
+        raise RuntimeError("FallbackChain: no functions provided")
+
+    def execute_sync(self, *args, **kwargs) -> T:
+        """Synchronous execute."""
+        last_error = None
+        for func in self._functions:
+            try:
+                return func(*args, **kwargs)
+            except Exception as e:
+                last_error = e
+                continue
+
+        if last_error:
+            raise last_error
+        raise RuntimeError("FallbackChain: no functions provided")
+
+
+def create_fallback_chain(*functions: Callable[..., T]) -> FallbackChain:
+    """Create a fallback chain from functions."""
+    return FallbackChain(*functions)

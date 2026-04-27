@@ -1,0 +1,35 @@
+version: '3.9'
+
+services:
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    ports:
+      - "8000:8000"
+    environment:
+      - CHECKPOINT_REDIS_URL=redis://redis:6379
+      - DEBUG=1
+    volumes:
+      - .:/app
+    command: python -m uvicorn luminamind.api:app --reload --host 0.0.0.0 --port 8000
+
+  dashboard:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    ports:
+      - "3000:3000"
+    volumes:
+      - .:/app
+    command: python -m uvicorn luminamind.monitoring.dashboard:app --reload --port 3000
+
+volumes:
+  redis_data:

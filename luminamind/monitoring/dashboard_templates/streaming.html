@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>LuminaMind - Real-Time Streaming</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: -apple-system, system-ui, sans-serif; background: #0f0f23; color: #e4e4e7; }
+        .container { max-width: 1400px; margin: 0 auto; padding: 20px; }
+        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+        h1 { font-size: 24px; font-weight: 600; color: #fff; }
+        .status { display: flex; align-items: center; gap: 8px; }
+        .status-dot { width: 8px; height: 8px; border-radius: 50%; background: #22c55e; }
+        .status-dot.disconnected { background: #ef4444; }
+        .status-dot.connecting { background: #eab308; }
+
+        .main-grid { display: grid; grid-template-columns: 1fr 350px; gap: 20px; }
+
+        .panel { background: #1a1a2e; border-radius: 12px; padding: 16px; border: 1px solid #2d2d4a; }
+        .panel-header { font-size: 14px; font-weight: 600; color: #a1a1aa; margin-bottom: 12px; text-transform: uppercase; letter-spacing: 0.5px; }
+
+        /* Token Stream */
+        .token-stream { height: 400px; overflow-y: auto; font-family: 'Monaco', 'Menlo', monospace; font-size: 14px; line-height: 1.6; }
+        .token-line { padding: 4px 8px; border-radius: 4px; margin-bottom: 2px; }
+        .token-line.thinking { background: #1e3a5f; border-left: 3px solid #3b82f6; }
+        .token-line.action { background: #3b2f1f; border-left: 3px solid #f59e0b; }
+        .token-line.observation { background: #1f3d2f; border-left: 3px solid #22c55e; }
+        .token-line.text { background: transparent; border-left: 3px solid #6b7280; }
+
+        /* Reasoning Trace */
+        .reasoning-trace { height: 300px; overflow-y: auto; }
+        .trace-step { padding: 12px; margin-bottom: 8px; border-radius: 8px; }
+        .trace-step.think { background: #1e3a5f; border-left: 4px solid #3b82f6; }
+        .trace-step.act { background: #3b2f1f; border-left: 4px solid #f59e0b; }
+        .trace-step.observe { background: #1f3d2f; border-left: 4px solid #22c55e; }
+        .trace-step-header { display: flex; justify-content: space-between; font-size: 12px; color: #a1a1aa; margin-bottom: 6px; }
+        .trace-step-content { font-size: 13px; white-space: pre-wrap; }
+
+        /* Tool Timeline */
+        .tool-timeline { height: 250px; overflow-y: auto; }
+        .tool-bar { display: flex; align-items: center; margin-bottom: 8px; }
+        .tool-name { width: 120px; font-size: 12px; font-family: monospace; color: #a1a1aa; }
+        .tool-bar-track { flex: 1; height: 24px; background: #2d2d4a; border-radius: 4px; position: relative; overflow: hidden; }
+        .tool-bar-fill { position: absolute; height: 100%; border-radius: 4px; transition: width 0.3s ease; }
+        .tool-bar-fill.running { background: #3b82f6; }
+        .tool-bar-fill.completed { background: #22c55e; }
+        .tool-bar-fill.failed { background: #ef4444; }
+        .tool-duration { width: 80px; text-align: right; font-size: 12px; color: #a1a1aa; }
+
+        /* Stats */
+        .stats-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+        .stat { background: #0f0f23; padding: 12px; border-radius: 8px; }
+        .stat-label { font-size: 11px; color: #71717a; text-transform: uppercase; letter-spacing: 0.5px; }
+        .stat-value { font-size: 24px; font-weight: 600; color: #fff; margin-top: 4px; }
+        .stat-value.warning { color: #eab308; }
+        .stat-value.danger { color: #ef4444; }
+
+        /* Progress */
+        .progress-bar { height: 8px; background: #2d2d4a; border-radius: 4px; margin-top: 8px; overflow: hidden; }
+        .progress-fill { height: 100%; background: linear-gradient(90deg, #3b82f6, #22c55e); border-radius: 4px; transition: width 0.3s ease; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Real-Time Agent Streaming</h1>
+            <div class="status">
+                <div class="status-dot" id="statusDot"></div>
+                <span id="statusText">Disconnected</span>
+            </div>
+        </div>
+
+        <div class="main-grid">
+            <div class="left-col">
+                <div class="panel">
+                    <div class="panel-header">Token Stream</div>
+                    <div class="token-stream" id="tokenStream"></div>
+                </div>
+
+                <div class="panel" style="margin-top: 16px;">
+                    <div class="panel-header">Reasoning Trace</div>
+                    <div class="reasoning-trace" id="reasoningTrace"></div>
+                </div>
+            </div>
+
+            <div class="right-col">
+                <div class="panel">
+                    <div class="panel-header">Token Consumption</div>
+                    <div class="stats-grid">
+                        <div class="stat">
+                            <div class="stat-label">Input</div>
+                            <div class="stat-value" id="inputTokens">0</div>
+                        </div>
+                        <div class="stat">
+                            <div class="stat-label">Output</div>
+                            <div class="stat-value" id="outputTokens">0</div>
+                        </div>
+                    </div>
+                    <div class="progress-bar">
+                        <div class="progress-fill" id="tokenProgress" style="width: 0%"></div>
+                    </div>
+                    <div style="font-size: 12px; color: #71717a; margin-top: 8px;">
+                        <span id="tokenCost">$0.00</span> estimated cost
+                    </div>
+                </div>
+
+                <div class="panel" style="margin-top: 16px;">
+                    <div class="panel-header">Tool Timeline</div>
+                    <div class="tool-timeline" id="toolTimeline"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // SSE connection for events
+        const eventSource = new EventSource('/events');
+
+        eventSource.onopen = () => {
+            document.getElementById('statusDot').className = 'status-dot';
+            document.getElementById('statusText').textContent = 'Connected';
+        };
+
+        eventSource.onerror = () => {
+            document.getElementById('statusDot').className = 'status-dot disconnected';
+            document.getElementById('statusText').textContent = 'Disconnected';
+        };
+
+        eventSource.onmessage = (event) => {
+            const data = JSON.parse(event.data);
+
+            if (data.event_type === 'TOKEN_STREAM') {
+                appendToken(data);
+            } else if (data.event_type === 'STATE_UPDATE') {
+                updateStats(data);
+            }
+        };
+
+        function appendToken(data) {
+            const stream = document.getElementById('tokenStream');
+            const line = document.createElement('div');
+            line.className = `token-line ${data.data.token_type}`;
+            line.textContent = data.data.token;
+            stream.appendChild(line);
+            stream.scrollTop = stream.scrollHeight;
+        }
+
+        function updateStats(data) {
+            // Update token counts
+            document.getElementById('inputTokens').textContent = data.data.input_tokens?.toLocaleString() || '0';
+            document.getElementById('outputTokens').textContent = data.data.output_tokens?.toLocaleString() || '0';
+            document.getElementById('tokenCost').textContent = `$${data.data.cost?.toFixed(4) || '0.00'}`;
+
+            // Update progress
+            const ratio = (data.data.output_tokens / 128000) * 100; // Assuming 128k context
+            document.getElementById('tokenProgress').style.width = `${Math.min(ratio, 100)}%`;
+        }
+    </script>
+</body>
+</html>
